@@ -7,7 +7,7 @@ Abonnement **Azure for Students** (crédit de 100 $), compte de l'équipe. Ce do
 | Poste | Montant | Source |
 |---|---|---|
 | VM du bootstrap (Minikube), resource group `rg-vm-pl`, supprimée | **12,54 €** | Portail Azure, Cost Management, relevé par l'équipe |
-| Cluster AKS et ACR (depuis le 2026-10-15) | *à relever* | Portail : Cost Management → Cost analysis, regroupé par resource group (`bernstein-spain-rg` et `MC_bernstein-spain-rg_bernstein-aks_spaincentral`) |
+| Cluster AKS et ACR (2026-10-15, première journée) | **< 0,10 €** | Portail Azure, Cost Management, relevé par l'équipe le 2026-10-16. Le portail affiche les coûts avec un décalage de plusieurs heures : ce montant ne couvre probablement pas encore toute la journée. À relever de nouveau |
 
 L'API de consommation (`az consumption usage list`) ne renvoie pas les montants sur cet abonnement (`pretaxCost: None` sur les 62 lignes d'octobre). Le relevé se fait donc dans le portail.
 
