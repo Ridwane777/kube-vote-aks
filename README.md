@@ -16,8 +16,14 @@ poll ──► redis ──► worker ──► postgres ◄── result
 | `k8s/` | Manifestes Kubernetes, appliqués dans l'ordre des numéros |
 | `scripts/deploy.sh` | Construction, push vers l'ACR, création du Secret, déploiement, IP publiques |
 | `scripts/probe.sh` | Mesure de la disponibilité pendant une mise à jour |
+| `scripts/load-test.js` | Test de charge (k6) |
 | `docs/adr/` | Décisions d'architecture et leurs compromis |
-| `docs/performance/` | Mesures de mise à jour sans coupure |
+| `docs/performance/` | Mises à jour sans coupure et test de charge |
+| `docs/costs/` | Coûts mesurés et estimés |
+| `docs/legal/` | Données personnelles, risques, politique de confidentialité, licences |
+| `docs/dependencies.md` | Fournisseurs, images, bibliothèques, secrets |
+| `docs/retrospective/` | Ce qu'on garderait, ce qu'on ferait autrement, actions suivantes |
+| `docs/business/` | Business plan |
 | `docs/kubernetes-guide.md` | Les notions Kubernetes utilisées, expliquées depuis zéro |
 
 ## Prérequis
