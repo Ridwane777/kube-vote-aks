@@ -105,7 +105,7 @@ Consommation maximale relevée, pendant le palier à 100 utilisateurs :
   - limite mémoire de poll : 88 Mi sur 128 Mi, il faut la relever avant une charge plus forte, sinon risque d'`OOMKilled` ;
   - demande mémoire du worker : la réduire, par exemple à 128 Mi ;
   - `requests` de PostgreSQL : à définir.
-- Le test ajoute ≈ 100 votants fictifs (un cookie `voter_id` par utilisateur virtuel) dans la table `votes`. Ils faussent les résultats affichés.
+- Le test ajoute **un votant fictif par vote** (5 157 lignes relevées dans `votes` après le test) : k6 vide les cookies à chaque itération, donc chaque vote arrive avec un nouveau `voter_id`. La table a été vidée (`TRUNCATE votes`) après le test.
 
 ## Limites
 
