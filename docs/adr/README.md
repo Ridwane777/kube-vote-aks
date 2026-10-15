@@ -9,3 +9,6 @@ Une décision par fichier, au format MADR. Un ADR accepté n'est jamais réécri
 | [0003](0003-manifestes-yaml-postgres-statefulset.md) | Manifestes en YAML simple, PostgreSQL en StatefulSet dans AKS | Accepté | 2026-10-15 |
 | [0004](0004-exposition-loadbalancer.md) | Exposition de poll et result par 2 Services `LoadBalancer` | Accepté (Service result remplacé par 0005) | 2026-10-15 |
 | [0005](0005-result-websocket-sans-affinite.md) | result en WebSocket, sans affinité de session | Accepté | 2026-10-15 |
+| [0006](0006-redis-ephemere-sans-mot-de-passe.md) | Redis éphémère, sans disque ni mot de passe | Accepté | 2026-10-15 |
+| [0007](0007-worker-un-replica.md) | Un seul réplica pour le worker | Accepté | 2026-10-15 |
+| [0008](0008-mises-a-jour-sans-coupure-et-ressources.md) | Mises à jour sans coupure, sondes et ressources | Accepté | 2026-10-15 |
