@@ -56,9 +56,61 @@ Scénario plus dur, utilisé pour éprouver les correctifs : 2 rollouts enchaîn
 | 2 rollouts enchaînés, essai 3 | 46/46 | 46/46 |
 | Référence sans déploiement | 20/20 | 40/40 |
 
+## Test de charge
+
+### Méthode
+
+| Élément | Valeur |
+|---|---|
+| Outil | [k6](https://k6.io), image Docker `grafana/k6`, script [`scripts/load-test.js`](../../scripts/load-test.js) |
+| Scénario | Chaque utilisateur virtuel charge la page de vote, vote (choix aléatoire), charge la page des résultats, puis attend 1 s |
+| Charge | Montée de 10 à 50 puis à **100 utilisateurs simultanés**, sur 3 min |
+| Seuils | Moins de 1 % d'erreurs, 95 % des requêtes sous 500 ms |
+| Générateur | Une machine en France (12 cœurs), vers les IP publiques en Spain Central |
+| Suivi | `kubectl top` et longueur de la file Redis toutes les 30 s ; redémarrages des pods avant et après |
+| Version | `v3`, 2026-10-15 |
+
+```sh
+POLL=http://<ip> RESULT=http://<ip> \
+docker run --rm -i -e POLL -e RESULT grafana/k6 run - < scripts/load-test.js
+```
+
+### Résultats
+
+| Mesure | Valeur |
+|---|---|
+| Requêtes | 15 453 (85 req/s), dont 5 151 votes (≈ 28 votes/s) |
+| Erreurs | **0** (seuil < 1 % ✅) |
+| Latence | médiane 174 ms, p95 **208 ms** (seuil < 500 ms ✅), max 6,45 s (un seul cas isolé) |
+| File Redis | **0** à chaque relevé : le worker traite les votes au rythme où ils arrivent |
+| Redémarrages de pods | 0 |
+
+La latence minimale est de 145 ms. Elle vient surtout du trajet réseau entre la France et l'Espagne, pas du traitement.
+
+Consommation maximale relevée, pendant le palier à 100 utilisateurs :
+
+| Pod | CPU | Mémoire | Comparé à la configuration |
+|---|---|---|---|
+| poll (×2) | 66–85m | 85–88 Mi | CPU au-dessus de la demande (50m), sans limite donc sans ralentissement. Mémoire à **69 % de la limite** (128 Mi) |
+| result (×2) | 14–15m | 36 Mi | Large marge |
+| worker | 15m | 58 Mi | Très en dessous de la demande (256 Mi) : surdimensionné |
+| redis | 21m | 7 Mi | — |
+| postgres | 10m | 42 Mi | Pas de `requests` définis |
+| Nœuds | 11–16 % CPU | 56–59 % mémoire | La mémoire est surtout occupée par les composants système d'AKS |
+
+### Ce qu'on en conclut
+
+- À 100 utilisateurs simultanés, l'application tient les seuils **sans erreur**, et **la limite n'a pas été atteinte**. Le facteur limitant de ce test est le générateur (1 itération par seconde et par utilisateur), pas le cluster.
+- **À ajuster** :
+  - limite mémoire de poll : 88 Mi sur 128 Mi, il faut la relever avant une charge plus forte, sinon risque d'`OOMKilled` ;
+  - demande mémoire du worker : la réduire, par exemple à 128 Mi ;
+  - `requests` de PostgreSQL : à définir.
+- Le test ajoute ≈ 100 votants fictifs (un cookie `voter_id` par utilisateur virtuel) dans la table `votes`. Ils faussent les résultats affichés.
+
 ## Limites
 
-- **Échantillon réduit** : quelques centaines de requêtes, depuis un seul client, sur quelques essais. Ces mesures montrent que les correctifs fonctionnent, elles ne prouvent pas un taux d'erreur nul.
+- **Échantillon réduit** pour les tests de mise à jour : quelques centaines de requêtes, depuis un seul client, sur quelques essais. Ces mesures montrent que les correctifs fonctionnent, elles ne prouvent pas un taux d'erreur nul.
 - **Un échec résiduel** sur result quand un second déploiement démarre avant la fin du premier (1 essai sur 3). Cause non identifiée. Pistes : délai de propagation des endpoints sur AKS, `preStop` plus long.
-- **Pas de test de charge** : la capacité (requêtes par seconde, latence sous charge, comportement à la limite des `resources`) n'est pas mesurée. Prochaine étape : un test `k6` ou `hey` sur poll, avec un seuil de latence et le suivi des redémarrages.
+- **La capacité maximale n'est pas connue** : le test de charge n'a pas fait atteindre sa limite au cluster. Prochaine étape : plusieurs générateurs ou un `sleep` plus court, jusqu'au premier seuil franchi.
+- Le test de charge ne mesure pas les connexions WebSocket de result (mises à jour en direct). Seul le chargement de la page est mesuré.
 - Le problème n° 1 n'a été vu qu'après l'exposition publique. Un test de charge avant l'exposition l'aurait détecté plus tôt.
