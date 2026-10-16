@@ -85,11 +85,36 @@ Le mot de passe est fixé au **premier démarrage** de PostgreSQL, sur un disque
 kubectl get secret postgres-secret -n bernstein -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
 ```
 
-## Arrêter et supprimer
+## Arrêter le cluster
 
 ```sh
-az aks stop  -g <resource-group> -n <cluster>   # éteint les nœuds (les données sont conservées)
+az aks stop -g <resource-group> -n <cluster>
+```
+
+Les nœuds (VM) s'éteignent : les pages ne répondent plus. Sont conservés : les IP publiques, les objets Kubernetes, le Secret et le disque des votes. Les IP, le Load Balancer, l'ACR et le disque restent facturés (≈ 1 €/jour, voir [docs/costs](docs/costs/README.md)).
+
+## Rallumer une application déjà déployée
+
+Pas besoin de relancer `scripts/deploy.sh` : Kubernetes redémarre tout seul les pods à partir des objets conservés.
+
+```sh
+# 1. Rallumer le cluster (quelques minutes)
 az aks start -g <resource-group> -n <cluster>
 
-kubectl delete namespace bernstein              # supprime l'application ET le disque des votes
+# 2. Si kubectl ne trouve pas le cluster (autre machine) : se reconnecter
+az aks get-credentials -g <resource-group> -n <cluster>
+
+# 3. Attendre que tous les pods soient Running 1/1 (Ctrl+C pour quitter)
+kubectl get pods -n bernstein -w
+
+# 4. Récupérer les adresses publiques (colonne EXTERNAL-IP)
+kubectl get svc -n bernstein
+```
+
+Les IP restent les mêmes tant que les Services ne sont pas supprimés. Avant une démonstration, rallumer le cluster au moins 10 minutes à l'avance. Le démarrage peut échouer si la région manque de capacité ([ADR-0002](docs/adr/0002-region-spain-central.md)) : réessayer plus tard.
+
+## Tout supprimer
+
+```sh
+kubectl delete namespace bernstein   # supprime l'application ET le disque des votes
 ```
