@@ -12,7 +12,7 @@ poll ──► redis ──► worker ──► postgres ◄── result
 
 | Chemin | Rôle |
 |---|---|
-| `project-applications/poll-application/` | Code et Dockerfiles fournis (result modifié, voir [ADR-0005](docs/adr/0005-result-websocket-sans-affinite.md)) |
+| `project-applications/poll-application/` | Code et Dockerfiles fournis, **non modifiés** (identiques à l'archive d'origine) |
 | `k8s/` | Manifestes Kubernetes, appliqués dans l'ordre des numéros |
 | `scripts/deploy.sh` | Construction, push vers l'ACR, création du Secret, déploiement, IP publiques |
 | `scripts/probe.sh` | Mesure de la disponibilité pendant une mise à jour |
@@ -75,7 +75,21 @@ TAG=v4 scripts/deploy.sh
 # Ctrl+C dans le terminal 1 : nombre de requêtes ok / en erreur
 ```
 
-Les Deployments font un rolling update (`maxUnavailable: 0`), avec readinessProbe, `preStop` et arrêt propre. Les mesures sont dans [docs/performance](docs/performance/README.md).
+Les Deployments font un rolling update (`maxUnavailable: 0`), avec readinessProbe et `preStop`. Les mesures sont dans [docs/performance](docs/performance/README.md).
+
+## Revenir à la version précédente (rollback)
+
+Chaque déploiement laisse ses images dans l'ACR sous son tag. Pour revenir en arrière, redéployer l'ancien tag **sans reconstruire** (`SKIP_BUILD=1`) : reconstruire écraserait l'ancien tag avec le code actuel.
+
+```sh
+# Tags disponibles
+az acr repository show-tags -n "$ACR_NAME" --repository poll -o table
+
+# Redéployer l'ancien tag (rolling update, sans coupure)
+TAG=<ancien-tag> SKIP_BUILD=1 scripts/deploy.sh
+```
+
+Alternative immédiate, sans le script : `kubectl rollout undo deployment/<poll|worker|result> -n bernstein`, qui revient à la révision précédente. Le prochain `scripts/deploy.sh` réappliquera le tag qu'on lui donne.
 
 ## Mot de passe PostgreSQL
 
@@ -111,7 +125,7 @@ kubectl get pods -n bernstein -w
 kubectl get svc -n bernstein
 ```
 
-Les IP restent les mêmes tant que les Services ne sont pas supprimés. Avant une démonstration, rallumer le cluster au moins 10 minutes à l'avance. Le démarrage peut échouer si la région manque de capacité ([ADR-0002](docs/adr/0002-region-spain-central.md)) : réessayer plus tard.
+Les IP restent les mêmes tant que les Services ne sont pas supprimés. **Même quand tous les pods sont `Running`, les pages peuvent ne pas répondre pendant environ 1 à 2 minutes**, le temps que le Load Balancer route vers les nœuds redémarrés (mesuré : ~80 s). Vérifier avec `curl -I http://<ip>/` avant de donner les adresses. Avant une démonstration, rallumer le cluster au moins 10 minutes à l'avance. Le démarrage peut échouer si la région manque de capacité ([ADR-0002](docs/adr/0002-region-spain-central.md)) : réessayer plus tard.
 
 ## Tout supprimer
 
