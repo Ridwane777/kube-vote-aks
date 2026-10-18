@@ -46,7 +46,7 @@ Scénario plus dur, utilisé pour éprouver les correctifs : 2 rollouts enchaîn
 | 2 rollouts | — | 80/81 |
 | WebSocket (`v2`), déploiement + 2 rollouts | 88/88 | 86/88 |
 
-### Version finale (`v3`)
+### Version `v3` (result modifié, abandonnée, voir ADR-0009)
 
 | Scénario | poll | result |
 |---|---|---|
@@ -82,7 +82,7 @@ Les résultats `v2` et `v3` ci-dessus portaient sur un result **modifié**. Modi
 | Seuils | Moins de 1 % d'erreurs, 95 % des requêtes sous 500 ms |
 | Générateur | Une machine en France (12 cœurs), vers les IP publiques en Spain Central |
 | Suivi | `kubectl top` et longueur de la file Redis toutes les 30 s ; redémarrages des pods avant et après |
-| Version | `v3`, 2026-10-15 |
+| Version | `v3` (result modifié), 2026-10-15. Poll, worker et Redis sont identiques à l'origine ; seule la page result a changé depuis |
 
 ```sh
 POLL=http://<ip> RESULT=http://<ip> \
@@ -126,5 +126,5 @@ Consommation maximale relevée, pendant le palier à 100 utilisateurs :
 - **Échantillon réduit** pour les tests de mise à jour : quelques centaines de requêtes, depuis un seul client, sur quelques essais. Ces mesures montrent que les correctifs fonctionnent, elles ne prouvent pas un taux d'erreur nul.
 - **Un échec résiduel** sur result quand un second déploiement démarre avant la fin du premier (1 essai sur 3). Cause non identifiée. Pistes : délai de propagation des endpoints sur AKS, `preStop` plus long.
 - **La capacité maximale n'est pas connue** : le test de charge n'a pas fait atteindre sa limite au cluster. Prochaine étape : plusieurs générateurs ou un `sleep` plus court, jusqu'au premier seuil franchi.
-- Le test de charge ne mesure pas les connexions WebSocket de result (mises à jour en direct). Seul le chargement de la page est mesuré.
+- Le test de charge ne mesure pas les connexions Socket.IO de result (mises à jour en direct). Seul le chargement de la page est mesuré. Il a été fait sur `v3` (result modifié) : à refaire sur la version d'origine.
 - Le problème n° 1 n'a été vu qu'après l'exposition publique. Un test de charge avant l'exposition l'aurait détecté plus tôt.
