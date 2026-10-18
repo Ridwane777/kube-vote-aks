@@ -1,0 +1,23 @@
+# Keep at least one pod of each web app during voluntary disruptions
+# (node drain, AKS node upgrade).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: poll
+  namespace: bernstein
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: poll
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: result
+  namespace: bernstein
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: result
