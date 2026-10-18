@@ -5,6 +5,11 @@ metadata:
   namespace: bernstein
 spec:
   type: LoadBalancer
+  # The original result client uses Socket.IO HTTP long-polling: a session only
+  # exists on the pod that created it, so a client must always reach the same
+  # pod. Local keeps the real client IP (no SNAT) so ClientIP affinity works.
+  externalTrafficPolicy: Local
+  sessionAffinity: ClientIP
   selector:
     app: result
   ports:
@@ -39,6 +44,7 @@ spec:
           labelSelector:
             matchLabels:
               app: result
+      terminationGracePeriodSeconds: 40
       containers:
         - name: result
           image: ${REGISTRY}/result:${TAG}
@@ -46,10 +52,12 @@ spec:
             - containerPort: 80
           # Keep serving while the load balancer and kube-proxy stop routing
           # to this pod, otherwise in-flight requests fail during a rollout.
+          # Longer than poll: with externalTrafficPolicy Local the Azure load
+          # balancer must first see the node's health check fail.
           lifecycle:
             preStop:
               sleep:
-                seconds: 10
+                seconds: 20
           env:
             - name: POSTGRES_HOST
               value: postgres
