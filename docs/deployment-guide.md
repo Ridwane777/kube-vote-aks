@@ -1,0 +1,416 @@
+# Guide de déploiement pas à pas
+
+Ce guide va **d'un ordinateur vierge à l'application en ligne**, puis couvre la mise à jour et le retour en arrière. Suivre les étapes dans l'ordre. Chaque étape se termine par une **vérification** : ne pas passer à la suivante tant qu'elle n'est pas bonne.
+
+| # | Étape | Qui | Durée |
+|---|---|---|---|
+| 1 | [Installer les outils](#étape-1--installer-les-outils) | chaque membre | 10 min |
+| 2 | [Récupérer le dépôt](#étape-2--récupérer-le-dépôt) | chaque membre | 1 min |
+| 3 | [Se connecter à Azure](#étape-3--se-connecter-à-azure) | chaque membre | 2 min |
+| 4 | [Créer le registre et le cluster](#étape-4--créer-le-registre-et-le-cluster-une-seule-fois) | un seul membre, une seule fois | 15 min |
+| 5 | [Donner l'accès aux autres membres](#étape-5--donner-laccès-aux-autres-membres) | le membre de l'étape 4 | 2 min |
+| 6 | [Se connecter au cluster](#étape-6--se-connecter-au-cluster) | chaque membre | 1 min |
+| 7 | [Déployer l'application](#étape-7--déployer-lapplication) | un membre | 5 min |
+| 8 | [Vérifier depuis un autre ordinateur](#étape-8--vérifier-depuis-un-autre-ordinateur) | n'importe qui | 2 min |
+| 9 | [Mettre à jour sans coupure](#étape-9--mettre-à-jour-sans-coupure) | un membre | 5 min |
+| 10 | [Revenir à la version précédente](#étape-10--revenir-à-la-version-précédente-rollback) | un membre | 2 min |
+| 11 | [Arrêter, rallumer, supprimer](#étape-11--arrêter-rallumer-supprimer) | un membre | — |
+
+Les commandes sont pour **Linux (Ubuntu / Debian)**. Pour macOS et Windows, voir les encadrés de l'étape 1.
+
+---
+
+## Étape 1 : Installer les outils
+
+| Outil | Rôle |
+|---|---|
+| `az` (Azure CLI) | Créer et piloter les ressources Azure |
+| `docker` | Construire les images des applications |
+| `kubectl` | Piloter le cluster Kubernetes |
+| `envsubst` | Remplir le registre et la version dans les manifestes (utilisé par le script) |
+| `git`, `openssl`, `curl` | Récupérer le dépôt, générer le mot de passe, tester les pages |
+
+### Linux (Ubuntu / Debian)
+
+```sh
+# Outils de base : git, openssl, curl, envsubst (paquet gettext-base)
+sudo apt update
+sudo apt install -y git openssl curl gettext-base
+
+# Azure CLI (script officiel Microsoft)
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# Docker (script officiel Docker), puis autoriser votre utilisateur à l'utiliser
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+# >>> Fermer la session et se reconnecter (ou redémarrer) pour que ce droit s'applique
+
+# kubectl, installé par l'Azure CLI
+sudo az aks install-cli
+```
+
+> **macOS** : installer [Docker Desktop](https://www.docker.com/products/docker-desktop/), puis `brew install azure-cli kubectl gettext git`.
+>
+> **Windows** : utiliser **WSL 2** (Ubuntu) et suivre les commandes Linux ci-dessus dans le terminal Ubuntu. Docker Desktop, avec l'intégration WSL activée, fournit `docker` dans WSL.
+
+### ✅ Vérification
+
+```sh
+az version --query '"azure-cli"' -o tsv     # une version, ex. 2.7x
+docker run --rm hello-world                 # "Hello from Docker!" (sans sudo)
+kubectl version --client                    # Client Version: v1.3x
+envsubst --version | head -1                # envsubst (GNU gettext-runtime)
+```
+
+Si `docker run` répond `permission denied`, la reconnexion après `usermod` n'a pas été faite.
+
+---
+
+## Étape 2 : Récupérer le dépôt
+
+```sh
+git clone git@github.com:Ridwane777/bernstein.git
+cd bernstein
+```
+
+### ✅ Vérification
+
+```sh
+ls       # README.md  docs  k8s  project-applications  scripts
+```
+
+**Toutes les commandes suivantes se lancent depuis ce dossier.**
+
+---
+
+## Étape 3 : Se connecter à Azure
+
+```sh
+az login
+```
+
+Un navigateur s'ouvre. Se connecter avec son compte the school (Azure for Students). Sur une machine sans navigateur : `az login --use-device-code`, puis ouvrir le lien affiché sur un autre appareil.
+
+Si plusieurs abonnements apparaissent, choisir le bon :
+
+```sh
+az account list -o table
+az account set --subscription "<nom-ou-id-de-l-abonnement>"
+```
+
+### ✅ Vérification
+
+```sh
+az account show --query "{abonnement:name, compte:user.name}" -o table
+```
+
+Le compte et l'abonnement affichés doivent être ceux du groupe. **Vérifier avant de créer quoi que ce soit** : tout ce qui est créé est facturé sur cet abonnement.
+
+---
+
+## Étape 4 : Créer le registre et le cluster (une seule fois)
+
+**Un seul membre** fait cette étape. Les autres passent directement à l'étape 6, une fois l'accès donné (étape 5).
+
+### 4.1 Choisir les noms
+
+```sh
+RG=bernstein-spain-rg          # groupe de ressources
+LOCATION=spaincentral          # région
+ACR_NAME=myregistry      # registre : lettres et chiffres, UNIQUE dans tout Azure
+CLUSTER=bernstein-aks          # cluster
+```
+
+Si le nom du registre est déjà pris (erreur à l'étape 4.4), en choisir un autre. Il faudra le réutiliser à l'étape 7.
+
+### 4.2 Vérifier ce que l'abonnement autorise
+
+Les abonnements étudiants limitent les régions, les tailles de VM et le nombre de vCPU. Vérifier avant de créer évite les échecs à mi-chemin ([ADR-0002](adr/0002-region-spain-central.md)).
+
+```sh
+# Régions autorisées par la politique de l'abonnement
+az policy assignment list --query "[].{nom:displayName}" -o table
+
+# Tailles de VM B2 disponibles dans la région (on utilise Standard_B2als_v2)
+az vm list-skus -l $LOCATION --size Standard_B2 --query "[?!(restrictions[?type=='Location'])].name" -o tsv
+
+# vCPU utilisés / autorisés dans la région (il en faut 4 de libres)
+az vm list-usage -l $LOCATION --query "[?name.value=='cores'].{utilises:currentValue, limite:limit}" -o table
+```
+
+✅ `Standard_B2als_v2` apparaît dans la liste, et il reste au moins 4 vCPU libres. Sinon, changer de région (`LOCATION=austriaeast`, par exemple) et recommencer cette étape.
+
+### 4.3 Activer les services Azure
+
+À faire une fois par abonnement (quelques minutes) :
+
+```sh
+for p in Microsoft.ContainerRegistry Microsoft.ContainerService Microsoft.Compute Microsoft.Network Microsoft.Storage; do
+  az provider register --namespace $p --wait
+done
+```
+
+### 4.4 Créer les ressources
+
+```sh
+# Groupe de ressources
+az group create -n $RG -l $LOCATION
+
+# Registre d'images privé (≈ 1 min)
+az acr create -g $RG -n $ACR_NAME --sku Basic
+
+# Cluster Kubernetes, relié au registre (≈ 10 min)
+az aks create -g $RG -n $CLUSTER -l $LOCATION \
+  --tier free --node-count 2 --node-vm-size Standard_B2als_v2 \
+  --network-plugin azure --network-plugin-mode overlay \
+  --attach-acr $ACR_NAME --generate-ssh-keys
+```
+
+`--attach-acr` autorise le cluster à télécharger les images du registre, sans mot de passe.
+
+### ✅ Vérification
+
+```sh
+az acr show -n $ACR_NAME --query "{nom:name, etat:provisioningState}" -o table           # Succeeded
+az aks show -g $RG -n $CLUSTER --query "{etat:provisioningState, power:powerState.code}" -o table   # Succeeded, Running
+```
+
+### En cas d'erreur
+
+| Message | Cause | Que faire |
+|---|---|---|
+| `RequestDisallowedByAzure` | Région interdite par la politique de l'abonnement | Reprendre l'étape 4.2 avec une région autorisée |
+| `MissingSubscriptionRegistration` | Service Azure non activé | Refaire l'étape 4.3 |
+| `The VM size … is not allowed` ou quota à 0 | Taille de VM indisponible pour AKS dans la région | Changer de région (4.1) |
+| `AllocationFailed` | Plus de capacité dans la région à ce moment | `az aks delete -g $RG -n $CLUSTER --yes`, puis réessayer plus tard ou dans une autre région |
+| `AlreadyInUse` sur le registre | Nom de registre déjà pris | Changer `ACR_NAME` (4.1) |
+
+---
+
+## Étape 5 : Donner l'accès aux autres membres
+
+Le membre qui a créé l'infrastructure donne le rôle **Contributor** sur le groupe de ressources à chaque autre membre. Ce rôle permet d'accéder au cluster, de l'arrêter et de le rallumer, et de pousser des images dans le registre.
+
+```sh
+az role assignment create --assignee <email-the school-du-membre> --role Contributor \
+  --scope "$(az group show -n $RG --query id -o tsv)"
+
+# Identifiant de l'abonnement, à transmettre aux autres membres
+az account show --query id -o tsv
+```
+
+L'autre membre doit pouvoir accéder à cet abonnement. Si `az role assignment create` répond que l'utilisateur est introuvable, l'inviter d'abord depuis le portail Azure (**Microsoft Entra ID → Utilisateurs → Inviter un utilisateur externe**).
+
+### ✅ Vérification
+
+```sh
+az role assignment list --scope "$(az group show -n $RG --query id -o tsv)" --query "[].{membre:principalName, role:roleDefinitionName}" -o table
+```
+
+---
+
+## Étape 6 : Se connecter au cluster
+
+À faire par **chaque membre**, sur sa propre machine, après les étapes 1 à 3 :
+
+```sh
+az account set --subscription <id-de-l-abonnement>    # celui transmis à l'étape 5
+az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+```
+
+Cette commande écrit l'accès au cluster dans `~/.kube/config`.
+
+### ✅ Vérification
+
+```sh
+kubectl get nodes
+```
+
+```
+NAME                                STATUS   ROLES    AGE   VERSION
+aks-nodepool1-xxxxxxxx-vmss000000   Ready    <none>   …     v1.35.x
+aks-nodepool1-xxxxxxxx-vmss000001   Ready    <none>   …     v1.35.x
+```
+
+Deux nœuds `Ready`. Si la commande répond `the server could not be reached`, le cluster est peut-être arrêté : voir l'étape 11.
+
+---
+
+## Étape 7 : Déployer l'application
+
+```sh
+export ACR_NAME=myregistry                       # le nom choisi à l'étape 4.1
+export POSTGRES_PASSWORD="$(openssl rand -hex 24)"     # premier déploiement uniquement
+scripts/deploy.sh
+```
+
+Le script :
+
+1. construit les 3 images (poll, worker, result) et les pousse dans le registre, avec un tag unique (le hash du commit) ;
+2. crée le namespace `bernstein` et le Secret `postgres-secret`, qui contient le mot de passe ;
+3. applique les manifestes `k8s/` : PostgreSQL (la table `votes` est créée au premier démarrage), Redis, poll, worker, result ;
+4. attend que tout soit prêt et affiche les adresses publiques.
+
+Premier déploiement mesuré : **1 min 45**, plus la durée des builds.
+
+```
+==> Public addresses (may take a minute on the first deployment)
+poll: http://<ip-poll>
+result: http://<ip-result>
+```
+
+**Le mot de passe n'est écrit nulle part** : il n'existe que dans le Secret Kubernetes. Pour le relire :
+`kubectl get secret postgres-secret -n bernstein -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d`.
+
+### ✅ Vérification
+
+```sh
+kubectl get pods -n bernstein
+```
+
+Il faut **7 pods `Running` et `1/1`** : `poll` ×2, `result` ×2, `worker`, `redis`, `postgres-0`.
+
+```sh
+kubectl get svc -n bernstein            # EXTERNAL-IP de poll et de result
+curl -I http://<ip-poll>/               # HTTP/1.1 200 OK
+curl -I http://<ip-result>/             # HTTP/1.1 200 OK
+```
+
+Si `curl` ne répond pas tout de suite, attendre 1 à 2 minutes : le Load Balancer Azure met un peu de temps à router.
+
+### En cas de problème
+
+| Symptôme | Commande pour voir | Cause fréquente |
+|---|---|---|
+| `error: docker is not installed` / `envsubst …` | — | Étape 1 incomplète |
+| `unauthorized` au `docker push` | `az acr login -n $ACR_NAME` | Pas de droit sur le registre (étape 5) |
+| Pod en `ImagePullBackOff` | `kubectl describe pod <pod> -n bernstein` | Cluster non relié au registre : `az aks update -g bernstein-spain-rg -n bernstein-aks --attach-acr $ACR_NAME` |
+| Pod en `CrashLoopBackOff` | `kubectl logs <pod> -n bernstein` | Base injoignable ou mot de passe incohérent |
+| `CreateContainerConfigError` | `kubectl describe pod <pod> -n bernstein` | Secret manquant : relancer avec `POSTGRES_PASSWORD` défini |
+| `EXTERNAL-IP` en `<pending>` | `kubectl get svc -n bernstein -w` | Attendre ; Azure est en train de créer l'IP |
+
+---
+
+## Étape 8 : Vérifier depuis un autre ordinateur
+
+Sur **un autre appareil**, par exemple un téléphone en 4G/5G, hors du réseau de l'ordinateur qui a déployé :
+
+1. Ouvrir `http://<ip-poll>` et voter pour une option.
+2. Ouvrir `http://<ip-result>` : le vote apparaît en quelques secondes, **sans recharger la page**.
+3. Revoter pour une autre option sur poll : le résultat bascule (un navigateur = un vote, le dernier compte).
+
+### ✅ Vérification côté cluster
+
+```sh
+kubectl exec postgres-0 -n bernstein -- psql -U postgres -c 'SELECT vote, count(*) FROM votes GROUP BY vote'
+```
+
+---
+
+## Étape 9 : Mettre à jour sans coupure
+
+**Terminal 1** : interroger les deux pages en continu pour compter les erreurs :
+
+```sh
+scripts/probe.sh /tmp/probe.log
+```
+
+**Terminal 2** : modifier le code d'une application, par exemple un texte dans `project-applications/poll-application/poll/templates/index.html`, puis déployer une nouvelle version :
+
+```sh
+export ACR_NAME=myregistry
+TAG=v2 scripts/deploy.sh
+```
+
+Pendant le déploiement, les pods sont remplacés un par un : un nouveau pod démarre, devient prêt, puis seulement un ancien s'arrête.
+
+```sh
+kubectl get pods -n bernstein -w        # pour regarder le remplacement (Ctrl+C pour quitter)
+```
+
+Quand le script a fini, faire **Ctrl+C dans le terminal 1** : le résumé indique le nombre de requêtes réussies et en erreur. Les mesures obtenues sont dans [docs/performance](performance/README.md).
+
+### ✅ Vérification
+
+```sh
+kubectl get deploy -n bernstein -o custom-columns=APP:.metadata.name,IMAGE:.spec.template.spec.containers[0].image
+```
+
+Les images de poll, worker et result portent le nouveau tag (`v2`). Recharger la page : la modification est visible.
+
+---
+
+## Étape 10 : Revenir à la version précédente (rollback)
+
+Chaque déploiement laisse ses images dans le registre. Pour revenir en arrière, redéployer l'ancien tag **sans reconstruire** :
+
+```sh
+# Voir les versions disponibles
+az acr repository show-tags -n $ACR_NAME --repository poll -o table
+
+# Revenir à la version voulue
+TAG=<ancien-tag> SKIP_BUILD=1 scripts/deploy.sh
+```
+
+> **Toujours mettre `SKIP_BUILD=1` pour un rollback.** Sans lui, le script reconstruirait l'ancien tag avec le code **actuel**, et l'ancienne version serait perdue.
+
+Alternative immédiate, sans le script, application par application :
+
+```sh
+kubectl rollout undo deployment/poll -n bernstein
+kubectl rollout status deployment/poll -n bernstein
+```
+
+### ✅ Vérification
+
+Même commande qu'à l'étape 9 : les images portent l'ancien tag, et la page affiche l'ancienne version.
+
+---
+
+## Étape 11 : Arrêter, rallumer, supprimer
+
+### Arrêter (à faire après chaque séance : le cluster allumé coûte ≈ 4,3 €/jour)
+
+```sh
+az aks stop -g bernstein-spain-rg -n bernstein-aks
+```
+
+Les pages ne répondent plus. L'application, le mot de passe et les votes sont conservés. Il reste environ 1 €/jour facturé (IP, registre, disque), voir [docs/costs](costs/README.md).
+
+### Rallumer une application déjà déployée
+
+```sh
+az aks start -g bernstein-spain-rg -n bernstein-aks      # quelques minutes
+kubectl get pods -n bernstein -w                         # attendre 7 pods Running 1/1, puis Ctrl+C
+kubectl get svc -n bernstein                             # mêmes IP qu'avant
+curl -I http://<ip-poll>/                                # attendre le 200 (≈ 1 à 2 min après le démarrage)
+```
+
+**Inutile de relancer `scripts/deploy.sh`** : Kubernetes redémarre tout seul l'application. Avant une soutenance, rallumer **au moins 10 minutes à l'avance**.
+
+### Supprimer
+
+```sh
+kubectl delete namespace bernstein                 # l'application ET les votes (les IP changeront au prochain déploiement)
+az group delete -n bernstein-spain-rg --yes        # TOUT : cluster, registre, disques. Plus rien n'est facturé
+```
+
+---
+
+## Récapitulatif des commandes
+
+```sh
+# Une fois par machine
+az login && az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+
+# Premier déploiement
+ACR_NAME=myregistry POSTGRES_PASSWORD="$(openssl rand -hex 24)" scripts/deploy.sh
+
+# Mise à jour / rollback
+ACR_NAME=myregistry TAG=v2 scripts/deploy.sh
+ACR_NAME=myregistry TAG=<ancien-tag> SKIP_BUILD=1 scripts/deploy.sh
+
+# Fin / début de séance
+az aks stop  -g bernstein-spain-rg -n bernstein-aks
+az aks start -g bernstein-spain-rg -n bernstein-aks
+```
