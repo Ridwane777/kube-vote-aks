@@ -3,6 +3,7 @@
 # current kubectl context.
 #
 # Usage: ACR_NAME=<registry> [TAG=<tag>] [POSTGRES_PASSWORD=<pw>] scripts/deploy.sh
+# Rollback to an existing tag: ACR_NAME=<registry> TAG=<old-tag> SKIP_BUILD=1 scripts/deploy.sh
 #
 # Prerequisites: az (logged in), docker, kubectl pointing at the AKS cluster,
 # the cluster attached to the registry (az aks update --attach-acr).
@@ -32,12 +33,22 @@ for cmd in az docker kubectl envsubst; do
 done
 echo "==> Registry $REGISTRY, tag $TAG, cluster $(kubectl config current-context)"
 
-echo "==> Build and push"
-az acr login --name "$ACR_NAME"
-for svc in "${SERVICES[@]}"; do
-  docker build --platform linux/amd64 -t "$REGISTRY/$svc:$TAG" "$APPS/$svc"
-  docker push "$REGISTRY/$svc:$TAG"
-done
+if [[ "${SKIP_BUILD:-0}" == 1 ]]; then
+  # Rollback / redeploy: reuse images already in the registry, never rebuild
+  # (rebuilding would overwrite the old tag with the current source code).
+  echo "==> Skip build, check that tag $TAG exists"
+  for svc in "${SERVICES[@]}"; do
+    az acr repository show -n "$ACR_NAME" --image "$svc:$TAG" >/dev/null \
+      || { echo "error: $svc:$TAG is not in $REGISTRY" >&2; exit 1; }
+  done
+else
+  echo "==> Build and push"
+  az acr login --name "$ACR_NAME"
+  for svc in "${SERVICES[@]}"; do
+    docker build --platform linux/amd64 -t "$REGISTRY/$svc:$TAG" "$APPS/$svc"
+    docker push "$REGISTRY/$svc:$TAG"
+  done
+fi
 
 echo "==> Namespace and secret"
 kubectl apply -f "$ROOT/k8s/00-namespace.yaml"
