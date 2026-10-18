@@ -26,10 +26,85 @@ poll ──► redis ──► worker ──► postgres ◄── result
 | `docs/business/` | Business plan |
 | `docs/kubernetes-guide.md` | Les notions Kubernetes utilisées, expliquées depuis zéro |
 
+## Procédure complète
+
+| Étape | Qui | Section |
+|---|---|---|
+| 1. Installer les outils | chaque membre | [Prérequis](#prérequis) |
+| 2. Créer le registre et le cluster (une seule fois) | un membre | [Créer l'infrastructure Azure](#créer-linfrastructure-azure-une-seule-fois) |
+| 3. Donner l'accès aux autres membres | le même membre | [Donner l'accès à un autre membre](#donner-laccès-à-un-autre-membre) |
+| 4. Déployer | n'importe quel membre | [Déployer](#déployer) |
+| 5. Vérifier depuis un autre ordinateur | n'importe qui | [Vérifier](#vérifier-le-déploiement) |
+| 6. Mettre à jour, revenir en arrière | n'importe quel membre | [Mettre à jour](#mettre-à-jour-sans-coupure), [Rollback](#revenir-à-la-version-précédente-rollback) |
+
 ## Prérequis
 
-- Un abonnement Azure, avec un cluster **AKS** et un registre **ACR** (voir [ADR-0001](docs/adr/0001-plateforme-aks-acr.md) et [ADR-0002](docs/adr/0002-region-spain-central.md) pour notre configuration) ;
-- en local : `az` (Azure CLI), `docker`, `kubectl` et `envsubst` (paquet `gettext`).
+- Un abonnement Azure ;
+- en local : `az` (Azure CLI), `docker`, `kubectl`, `envsubst` (paquet `gettext`), `git`, `openssl`.
+
+```sh
+az version && docker version && kubectl version --client && envsubst --version | head -1
+```
+
+## Créer l'infrastructure Azure (une seule fois)
+
+Notre configuration et ses raisons sont dans l'[ADR-0001](docs/adr/0001-plateforme-aks-acr.md) et l'[ADR-0002](docs/adr/0002-region-spain-central.md). Les noms ci-dessous sont les nôtres. Le nom du registre doit être **unique dans tout Azure** : en choisir un autre pour un nouvel abonnement.
+
+```sh
+az login
+az account show --query "{abonnement:name, compte:user.name}"   # vérifier le bon compte
+
+RG=bernstein-spain-rg; LOCATION=spaincentral; ACR_NAME=myregistry; CLUSTER=bernstein-aks
+
+# 1. Vérifier ce que l'abonnement autorise (régions, tailles de VM, quota)
+az policy assignment list --query "[].displayName" -o tsv
+az vm list-skus -l $LOCATION --size Standard_B2 --query "[?!(restrictions[?type=='Location'])].name" -o tsv
+az vm list-usage -l $LOCATION --query "[?name.value=='cores'].{used:currentValue,limit:limit}" -o table
+
+# 2. Activer les services Azure utilisés (une fois par abonnement)
+for p in Microsoft.ContainerRegistry Microsoft.ContainerService Microsoft.Compute Microsoft.Network Microsoft.Storage; do
+  az provider register --namespace $p --wait
+done
+
+# 3. Créer le groupe de ressources, le registre et le cluster (≈ 10 min)
+az group create -n $RG -l $LOCATION
+az acr create -g $RG -n $ACR_NAME --sku Basic
+az aks create -g $RG -n $CLUSTER -l $LOCATION \
+  --tier free --node-count 2 --node-vm-size Standard_B2als_v2 \
+  --network-plugin azure --network-plugin-mode overlay \
+  --attach-acr $ACR_NAME --generate-ssh-keys
+
+# 4. Récupérer l'accès au cluster
+az aks get-credentials -g $RG -n $CLUSTER
+kubectl get nodes        # 2 nœuds Ready
+```
+
+En cas d'échec de `az aks create` :
+
+| Erreur | Cause | Solution |
+|---|---|---|
+| `RequestDisallowedByAzure` | La région n'est pas autorisée par la politique de l'abonnement | Choisir une région de la liste de l'étape 1 |
+| `MissingSubscriptionRegistration` | Service Azure non activé | Refaire l'étape 2 |
+| Taille non autorisée, quota à 0 | La taille de VM n'est pas disponible pour AKS dans cette région | Étape 1, choisir une autre région ou une autre taille |
+| `AllocationFailed` | Pas de capacité dans la région à ce moment-là | Supprimer le cluster à moitié créé (`az aks delete`) et réessayer plus tard ou ailleurs |
+
+## Donner l'accès à un autre membre
+
+Le membre qui a créé l'infrastructure ajoute l'autre membre comme *Contributor* sur le groupe de ressources. Ce rôle permet de récupérer l'accès au cluster, de l'arrêter et de le rallumer, et de pousser des images dans le registre.
+
+```sh
+az role assignment create --assignee <email-du-membre> --role Contributor \
+  --scope "$(az group show -n $RG --query id -o tsv)"
+```
+
+L'autre membre, sur **sa** machine :
+
+```sh
+az login                                   # avec son propre compte
+az account set --subscription <id-de-l-abonnement>
+az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+kubectl get nodes
+```
 
 ## Ce qui n'est pas dans le dépôt, et où le fournir
 
@@ -65,6 +140,20 @@ result: http://<ip>
 Chaque déploiement utilise un tag d'image unique : le hash du commit git (avec un suffixe s'il y a des modifications non commitées), ou `TAG=<tag>` pour le choisir.
 
 Pour retrouver les IP plus tard : `kubectl get svc -n bernstein`.
+
+## Vérifier le déploiement
+
+```sh
+kubectl get pods -n bernstein          # 7 pods Running 1/1 : 2 poll, 2 result, worker, redis, postgres-0
+kubectl get svc -n bernstein           # EXTERNAL-IP de poll et result
+curl -I http://<ip-poll>/              # HTTP 200 (peut prendre 1 à 2 minutes au premier déploiement)
+```
+
+Puis, **depuis un autre ordinateur** (ou un téléphone sur le réseau mobile) :
+
+1. Ouvrir `http://<ip-poll>` et voter.
+2. Ouvrir `http://<ip-result>` : le vote apparaît en quelques secondes, sans recharger la page.
+3. Revoter pour une autre option : le résultat bascule (un votant = un vote, le dernier compte).
 
 ## Mettre à jour sans coupure
 
