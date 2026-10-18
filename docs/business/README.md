@@ -10,7 +10,7 @@ Un organisateur d'événement (conférence, cours, réunion d'entreprise, associ
 
 Une application de vote en direct (pages de vote et de résultats en temps réel), **déployable en une commande** sur le cluster Kubernetes du client ou sur un cluster géré par nous :
 
-- mises à jour sans interruption (mesurées : 0 erreur pendant un déploiement) ;
+- mises à jour progressives, mesurées : 0 à 1 requête en échec par déploiement avec le code d'origine ([docs/performance](../performance/README.md)) ;
 - hébergement dans l'UE (Espagne) ;
 - aucun compte demandé aux votants, seul un identifiant pseudonyme est utilisé.
 
@@ -53,7 +53,7 @@ La capacité maximale n'est pas connue : le test de charge n'a pas atteint la li
 
 | | Positif | Négatif |
 |---|---|---|
-| **Interne** | **Forces** : déploiement reproductible en une commande ; mises à jour sans coupure mesurées ; hébergement UE ; coûts connus et maîtrisés | **Faiblesses** : fonctionnalités minimales ; pas de HTTPS ; pas de sauvegarde ; bibliothèques front obsolètes ([docs/legal](../legal/README.md)) ; une seule personne sait l'exploiter |
+| **Interne** | **Forces** : déploiement reproductible en une commande ; mises à jour progressives et rollback mesurés ; hébergement UE ; coûts connus et maîtrisés | **Faiblesses** : fonctionnalités minimales ; zéro erreur non garanti pendant les mises à jour de result (code imposé) ; pas de HTTPS ; pas de sauvegarde ; bibliothèques front obsolètes ([docs/legal](../legal/README.md)) ; une seule personne sait l'exploiter |
 | **Externe** | **Opportunités** : demande de souveraineté des données (RGPD, secteur public) ; organisations déjà équipées de Kubernetes | **Menaces** : concurrents établis et gratuits pour un petit usage ; dépendance à Azure et à ses quotas ; évolution des licences (Redis) |
 
 ## Feuille de route
