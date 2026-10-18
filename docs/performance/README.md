@@ -121,10 +121,28 @@ Consommation maximale relevée, pendant le palier à 100 utilisateurs :
   - `requests` de PostgreSQL : à définir.
 - Le test ajoute **un votant fictif par vote** (5 157 lignes relevées dans `votes` après le test) : k6 vide les cookies à chaque itération, donc chaque vote arrive avec un nouveau `voter_id`. La table a été vidée (`TRUNCATE votes`) après le test.
 
+### Version d'origine (`56d0fd8`, 2026-10-18)
+
+Même scénario, sur un déploiement fait **de zéro** (namespace supprimé, puis les seules commandes du README), avec les ressources ajustées et les tags `redis:8.10.2` et `postgres:18.6` fixés :
+
+| Mesure | `v3` (result modifié) | **Version d'origine** |
+|---|---|---|
+| Requêtes | 15 453 (85 req/s) | 14 793 (82 req/s), dont 4 931 votes |
+| Erreurs | 0 | **0** |
+| Latence p95 | 208 ms | **260 ms** (seuil 500 ms ✅), max 1,52 s |
+| File Redis | 0 | 0 |
+| Redémarrages | 0 | 0 |
+| poll, max par pod | 85m, 88 Mi | 109m, 89 Mi, soit **35 % de la nouvelle limite** (256 Mi) |
+| result, max par pod | 14–15m sur chaque pod | **2m et 33m** |
+
+- **Charge déséquilibrée entre les pods result** : le générateur n'a qu'une IP, et l'affinité `ClientIP` l'envoie donc toujours sur le même pod. Avec de vrais visiteurs, chacun avec son IP, la charge se répartit. Mais un public derrière un même NAT (une salle, une école) irait tout entier sur un seul pod.
+- La latence est un peu plus élevée qu'avec `v3` : le transport polling de Socket.IO fait plus de requêtes. Elle reste dans le seuil.
+- La table `votes` a été vidée après le test (4 933 lignes de test).
+
 ## Limites
 
 - **Échantillon réduit** pour les tests de mise à jour : quelques centaines de requêtes, depuis un seul client, sur quelques essais. Ces mesures montrent que les correctifs fonctionnent, elles ne prouvent pas un taux d'erreur nul.
 - **Un échec résiduel** sur result quand un second déploiement démarre avant la fin du premier (1 essai sur 3). Cause non identifiée. Pistes : délai de propagation des endpoints sur AKS, `preStop` plus long.
 - **La capacité maximale n'est pas connue** : le test de charge n'a pas fait atteindre sa limite au cluster. Prochaine étape : plusieurs générateurs ou un `sleep` plus court, jusqu'au premier seuil franchi.
-- Le test de charge ne mesure pas les connexions Socket.IO de result (mises à jour en direct). Seul le chargement de la page est mesuré. Il a été fait sur `v3` (result modifié) : à refaire sur la version d'origine.
+- Le test de charge ne mesure pas les connexions Socket.IO de result (mises à jour en direct). Seul le chargement de la page est mesuré.
 - Le problème n° 1 n'a été vu qu'après l'exposition publique. Un test de charge avant l'exposition l'aurait détecté plus tôt.
