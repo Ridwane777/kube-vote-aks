@@ -491,6 +491,7 @@ Tout est dans le namespace « bernstein ». Les images viennent de l'ACR.
 | `k8s/30-poll.yaml` | Service `LoadBalancer` + Deployment poll (×2) |
 | `k8s/40-worker.yaml` | Deployment worker (×1, pas de Service) |
 | `k8s/50-result.yaml` | Service `LoadBalancer` (affinité `ClientIP`) + Deployment result (×2) |
+| `k8s/60-disruption-budgets.yaml` | PodDisruptionBudgets : au moins 1 pod poll et 1 pod result pendant un drain de nœud |
 
 ---
 
