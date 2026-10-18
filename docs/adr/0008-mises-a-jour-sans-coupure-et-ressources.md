@@ -1,6 +1,6 @@
 # ADR-0008 : Mises à jour sans coupure, sondes et ressources
 
-- **Statut :** Accepté
+- **Statut :** Accepté — partie result (arrêt propre, `preStop` de 10 s) remplacée par [ADR-0009](0009-composants-d-origine-non-modifies.md)
 - **Date :** 2026-10-15
 - **Décideurs :** Ridwane
 
