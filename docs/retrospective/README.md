@@ -49,8 +49,8 @@ Un regard sur **l'ensemble du projet**, du bootstrap au déploiement mesuré : c
 | Priorité | Action | Document lié |
 |---|---|---|
 | 1 | Relever le coût mesuré d'AKS dans Cost Management | [docs/costs](../costs/README.md) |
-| 2 | Ajuster les ressources (limite mémoire de poll, demande du worker, `requests` de PostgreSQL) | [docs/performance](../performance/README.md) |
-| 3 | Fixer les tags `redis` et `postgres` | [docs/dependencies.md](../dependencies.md) |
-| 4 | Ajouter un PodDisruptionBudget sur poll et result | [ADR-0008](../adr/0008-mises-a-jour-sans-coupure-et-ressources.md) |
+| ✅ | Ressources ajustées : limite mémoire de poll 256 Mi, demande du worker 128 Mi, `requests` de PostgreSQL et Redis (2026-10-18) | [docs/performance](../performance/README.md) |
+| ✅ | Tags fixés : `redis:8.10.2`, `postgres:18.6` (2026-10-18) | [docs/dependencies.md](../dependencies.md) |
+| ✅ | PodDisruptionBudgets sur poll et result, `k8s/60-disruption-budgets.yaml` (2026-10-18) | [ADR-0008](../adr/0008-mises-a-jour-sans-coupure-et-ressources.md) |
 | 5 | Passer à Kustomize, puis à une CI/CD GitHub Actions | ADR à écrire |
 | 6 | Mettre en place HTTPS et la sauvegarde de PostgreSQL avant toute utilisation réelle | [docs/legal](../legal/README.md) |
