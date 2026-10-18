@@ -1,6 +1,6 @@
 # ADR-0005 : result en WebSocket, sans affinité de session
 
-- **Statut :** Accepté
+- **Statut :** Remplacé par [ADR-0009](0009-composants-d-origine-non-modifies.md) (modifier un composant est éliminatoire)
 - **Date :** 2026-10-15
 - **Décideurs :** Ridwane
 - **Remplace :** [ADR-0004](0004-exposition-loadbalancer.md), pour la configuration du Service `result` uniquement (`sessionAffinity: ClientIP` et `externalTrafficPolicy: Local`). L'exposition par 2 Services `LoadBalancer` reste valable.
