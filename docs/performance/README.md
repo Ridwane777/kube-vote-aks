@@ -56,6 +56,20 @@ Scénario plus dur, utilisé pour éprouver les correctifs : 2 rollouts enchaîn
 | 2 rollouts enchaînés, essai 3 | 46/46 | 46/46 |
 | Référence sans déploiement | 20/20 | 40/40 |
 
+### Version d'origine (`v4`, 2026-10-18), après l'ADR-0009
+
+Les résultats `v2` et `v3` ci-dessus portaient sur un result **modifié**. Modifier un composant étant éliminatoire, le code d'origine a été restauré ([ADR-0009](../adr/0009-composants-d-origine-non-modifies.md)) : transport polling, affinité `ClientIP` + `externalTrafficPolicy: Local`, `preStop` de 20 s, sans arrêt propre. Mesures avec `scripts/probe.sh` :
+
+| Scénario | poll | result |
+|---|---|---|
+| Juste après `az aks start` (pods `Ready`, aucun déploiement en cours) | **~80 s sans réponse** | **~80 s sans réponse** |
+| Déploiement de `v4` (code d'origine) | ok | 1 échec |
+| Déploiement de `v5` | 69/69 | 68/68 |
+| **Rollback** vers `v4` (`TAG=v4 SKIP_BUILD=1 scripts/deploy.sh`) | 65/66 | 66/66 |
+
+- **Coupure après le redémarrage** : les deux applications sont tombées ensemble, avant tout déploiement. Les pods étaient prêts, mais le Load Balancer n'avait pas encore fini de router vers les nœuds recréés. Il faut donc attendre que les pages répondent avant une démonstration ([README](../../README.md)).
+- **Mises à jour** : 1 échec isolé par déploiement dans 2 cas sur 3. C'est le zéro erreur exigé qui n'est **pas garanti** avec le code d'origine. Pour result, la cause la plus probable est l'arrêt immédiat de Node.js sur `SIGTERM` (le code d'origine n'a pas d'arrêt propre), combiné à l'affinité. L'échec isolé de poll pendant le rollback n'est pas expliqué (gunicorn s'arrête proprement). L'amélioration possible sans toucher au code serait un Ingress avec affinité par cookie (ADR-0009, option B).
+
 ## Test de charge
 
 ### Méthode
