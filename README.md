@@ -28,6 +28,8 @@ poll ──► redis ──► worker ──► postgres ◄── result
 
 ## Procédure complète
 
+> **Pour déployer, suivre [docs/deployment-guide.md](docs/deployment-guide.md)** : le guide pas à pas, de l'installation de `az` jusqu'au rollback, avec une vérification à chaque étape. Les sections ci-dessous en sont le résumé.
+
 | Étape | Qui | Section |
 |---|---|---|
 | 1. Installer les outils | chaque membre | [Prérequis](#prérequis) |
