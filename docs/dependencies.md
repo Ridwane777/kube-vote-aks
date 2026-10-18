@@ -7,18 +7,18 @@ Relevé le 2026-10-15 dans le dépôt et sur le cluster.
 | Dépendance | Usage | Quota / limite connue | En cas d'indisponibilité |
 |---|---|---|---|
 | Microsoft Azure (Azure for Students) | AKS, ACR, disques, IP publiques | Crédit de 100 $. **6 vCPU régionaux**. Régions autorisées par politique : Sweden Central, Austria East, Germany West Central, Spain Central, Italy North ([ADR-0002](adr/0002-region-spain-central.md)) | Plus de déploiement possible. Le dépôt reste portable (manifestes Kubernetes standard, seuls les scripts `az` changent) |
-| Docker Hub | Images de base `python:3.14-slim`, `node:24-slim`, `maven`, `eclipse-temurin:25-jre`, `redis:8`, `postgres:18` | Limite de téléchargements anonymes | Les builds et le démarrage des pods Redis et PostgreSQL échouent |
+| Docker Hub | Images de base `python:3.14-slim`, `node:24-slim`, `maven`, `eclipse-temurin:25-jre`, `redis:8.10.2`, `postgres:18.6` | Limite de téléchargements anonymes | Les builds et le démarrage des pods Redis et PostgreSQL échouent |
 | CDN publics (Google, jQuery, BootstrapCDN) | AngularJS, jQuery, Font Awesome, chargés par le navigateur | — | Pages sans style ni interactivité (voir [docs/legal](legal/README.md), risques 3 et 4) |
 
 ## Images et versions
 
 | Image | Tag utilisé | Version réellement tirée | Risque |
 |---|---|---|---|
-| `redis` | `8` | 8.10.2 | **Tag flottant** : un redémarrage peut tirer une nouvelle version mineure |
-| `postgres` | `18` | 18.x | Tag flottant, même risque. Un changement de version majeure exigerait une migration des données |
+| `redis` | `8.10.2` (fixé le 2026-10-18) | 8.10.2 | Aucun. Avant : `8`, un tag flottant |
+| `postgres` | `18.6` (fixé le 2026-10-18) | 18.6 | Aucun. Avant : `18`. Un changement de version majeure exigerait une migration des données |
 | `poll`, `worker`, `result` | tag par déploiement (`v3`, hash git) | — | Aucun : les tags sont immuables |
 
-Amélioration : fixer les tags (`redis:8.10.2`) ou les empreintes (`redis@sha256:…`).
+Amélioration restante : fixer les empreintes (`redis@sha256:…`) pour se protéger d'un tag republié.
 
 ## Bibliothèques
 
