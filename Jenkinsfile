@@ -47,6 +47,9 @@ pipeline {
         sh '''#!/bin/bash
           set -euo pipefail
           mkdir -p "$HOME"
+          # Parameters do not exist yet on the very first build of the job
+          # (Jenkins discovers them from this file), hence the defaults.
+          TAG="${TAG:-}"; ROLLBACK="${ROLLBACK:-false}"
           if [ "$ROLLBACK" = true ] && [ -z "$TAG" ]; then
             echo "A rollback needs the TAG to redeploy" >&2; exit 1
           fi
@@ -89,8 +92,8 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
-          export SKIP_BUILD=0
-          if [ "$ROLLBACK" = true ]; then SKIP_BUILD=1; fi
+          export TAG="${TAG:-}" SKIP_BUILD=0
+          if [ "${ROLLBACK:-false}" = true ]; then SKIP_BUILD=1; fi
           # Only used if the postgres-secret Secret does not exist yet (first
           # deployment on a fresh cluster); it then lives only in Kubernetes.
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
