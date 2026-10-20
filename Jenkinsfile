@@ -1,6 +1,7 @@
 // Deploy the Poll application from Jenkins ("Build with Parameters").
-// Leave TAG empty to build and deploy the current commit; set TAG and tick
-// ROLLBACK to redeploy an existing version without rebuilding.
+// ACTION=deploy: leave TAG empty to build and deploy the current commit; set
+// TAG and tick ROLLBACK to redeploy an existing version without rebuilding.
+// ACTION=stop / start: stop or start the AKS cluster, nothing else.
 //
 // Steps run inside the tools image ci/Dockerfile (az, kubectl, envsubst, git),
 // built by Jenkins with the Docker Pipeline plugin. Images are built by the
@@ -18,6 +19,8 @@ pipeline {
   }
 
   parameters {
+    choice(name: 'ACTION', choices: ['deploy', 'stop', 'start'],
+           description: 'deploy = build and deploy; stop = stop the cluster (saves money); start = start it without redeploying')
     string(name: 'TAG', defaultValue: '', description: 'Image tag (empty = current commit)')
     booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Redeploy the existing TAG without rebuilding')
   }
@@ -50,6 +53,7 @@ pipeline {
           # Parameters do not exist yet on the very first build of the job
           # (Jenkins discovers them from this file), hence the defaults.
           TAG="${TAG:-}"; ROLLBACK="${ROLLBACK:-false}"
+          echo "ACTION=${ACTION:-deploy}"
           if [ "$ROLLBACK" = true ] && [ -z "$TAG" ]; then
             echo "A rollback needs the TAG to redeploy" >&2; exit 1
           fi
@@ -76,7 +80,19 @@ pipeline {
       }
     }
 
+    stage('Stop cluster') {
+      when { expression { (params.ACTION ?: 'deploy') == 'stop' } }
+      steps {
+        sh '''#!/bin/bash
+          set -euo pipefail
+          az aks stop -g "$RESOURCE_GROUP" -n "$CLUSTER" -o none
+          echo "Cluster power state: $(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER" --query powerState.code -o tsv)"
+        '''
+      }
+    }
+
     stage('Start cluster if stopped') {
+      when { expression { (params.ACTION ?: 'deploy') != 'stop' } }
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
@@ -88,7 +104,27 @@ pipeline {
       }
     }
 
+    stage('Wait for the application') {
+      when { expression { params.ACTION == 'start' } }
+      steps {
+        sh '''#!/bin/bash
+          set -euo pipefail
+          kubectl wait --for=condition=Ready pods --all -n bernstein --timeout=600s
+          # Pods can be ready before the load balancer routes to the restarted nodes.
+          for svc in poll result; do
+            ip="$(kubectl get svc "$svc" -n bernstein -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+            for _ in $(seq 1 60); do
+              curl -fs -o /dev/null -m 3 "http://$ip/" && break
+              sleep 5
+            done
+            echo "$svc: http://$ip ($(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$ip/"))"
+          done
+        '''
+      }
+    }
+
     stage('Deploy') {
+      when { expression { (params.ACTION ?: 'deploy') == 'deploy' } }
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
@@ -106,9 +142,13 @@ pipeline {
 
   post {
     success {
-      sh '''#!/bin/bash
-        echo "Deployed image: $(kubectl get deploy poll -n bernstein -o jsonpath='{.spec.template.spec.containers[0].image}')"
-      '''
+      script {
+        if ((params.ACTION ?: 'deploy') != 'stop') {
+          sh '''#!/bin/bash
+            echo "Running image: $(kubectl get deploy poll -n bernstein -o jsonpath='{.spec.template.spec.containers[0].image}')"
+          '''
+        }
+      }
     }
     always {
       // Do not leave Azure or cluster credentials on the agent.
