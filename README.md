@@ -8,6 +8,21 @@ poll ──► redis ──► worker ──► postgres ◄── result
  └──── IP publique              IP publique ─┘
 ```
 
+## 🚀 Déployer en un clic
+
+| Action | Lien |
+|---|---|
+| **Déployer, arrêter, redémarrer, revenir en arrière** (Jenkins) | **[http://jenkins.example.com:8090/job/bernstein-deploy/build](http://jenkins.example.com:8090/job/bernstein-deploy/build)** → *Build with Parameters* |
+| Même chose avec GitHub Actions (quand l'organisation a des minutes) | [Actions → Deploy → Run workflow](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml) |
+
+| Paramètre Jenkins | Effet |
+|---|---|
+| `ACTION` = **deploy**, `TAG` vide | Construit et déploie le dernier commit de `main` (rallume le cluster si besoin) |
+| `ACTION` = **deploy**, `TAG` = ancienne version + **ROLLBACK** coché | Revient à cette version sans reconstruire |
+| `ACTION` = **stop** / **start** | Arrête / rallume le cluster |
+
+Connexion à Jenkins requise. Configuration : [étape 13 du guide](docs/deployment-guide.md#étape-13--déployer-depuis-un-lien-jenkins). Sans Jenkins, la [procédure en ligne de commande](docs/deployment-guide.md) fait la même chose.
+
 ## Contenu
 
 | Chemin | Rôle |
@@ -31,10 +46,6 @@ poll ──► redis ──► worker ──► postgres ◄── result
 
 ## Procédure complète
 
-> **Déployer, arrêter, redémarrer depuis un lien (Jenkins) : http://jenkins.example.com:8090/job/bernstein-deploy/build** → *Build with Parameters* (`ACTION` = deploy / stop / start, `TAG` et `ROLLBACK` pour revenir en arrière). Compte Jenkins requis. Détails : [étape 13 du guide](docs/deployment-guide.md#étape-13--déployer-depuis-un-lien-jenkins).
->
-> Alternative quand l'organisation a des minutes GitHub Actions : [Actions → Deploy](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml) ([étape 12](docs/deployment-guide.md#étape-12--déployer-depuis-un-lien-github-actions)).
->
 > **Pour déployer, suivre [docs/deployment-guide.md](docs/deployment-guide.md)** : le guide pas à pas, de l'installation de `az` jusqu'au rollback, avec une vérification à chaque étape. Les sections ci-dessous en sont le résumé.
 
 | Étape | Qui | Section |
