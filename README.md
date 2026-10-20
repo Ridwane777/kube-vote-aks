@@ -17,6 +17,9 @@ poll ──► redis ──► worker ──► postgres ◄── result
 | `scripts/deploy.sh` | Construction, push vers l'ACR, création du Secret, déploiement, IP publiques |
 | `scripts/probe.sh` | Mesure de la disponibilité pendant une mise à jour |
 | `scripts/load-test.js` | Test de charge (k6) |
+| `Jenkinsfile`, `ci/Dockerfile` | Pipeline Jenkins (déployer, arrêter, redémarrer) et son image d'outils |
+| `.github/workflows/deploy.yml` | Même déploiement par GitHub Actions |
+| `docs/deployment-guide.md` | **Guide pas à pas**, de l'installation des outils au rollback |
 | `docs/adr/` | Décisions d'architecture et leurs compromis |
 | `docs/performance/` | Mises à jour sans coupure et test de charge |
 | `docs/costs/` | Coûts mesurés et estimés |
@@ -28,7 +31,9 @@ poll ──► redis ──► worker ──► postgres ◄── result
 
 ## Procédure complète
 
-> **Déployer depuis un lien :** avec Jenkins (`Jenkinsfile`, [étape 13 du guide](docs/deployment-guide.md#étape-13--déployer-depuis-un-lien-jenkins)), ou avec [GitHub Actions](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml) quand l'organisation a des minutes disponibles ([étape 12](docs/deployment-guide.md#étape-12--déployer-depuis-un-lien-github-actions)).
+> **Déployer, arrêter, redémarrer depuis un lien (Jenkins) : http://jenkins.example.com:8090/job/bernstein-deploy/build** → *Build with Parameters* (`ACTION` = deploy / stop / start, `TAG` et `ROLLBACK` pour revenir en arrière). Compte Jenkins requis. Détails : [étape 13 du guide](docs/deployment-guide.md#étape-13--déployer-depuis-un-lien-jenkins).
+>
+> Alternative quand l'organisation a des minutes GitHub Actions : [Actions → Deploy](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml) ([étape 12](docs/deployment-guide.md#étape-12--déployer-depuis-un-lien-github-actions)).
 >
 > **Pour déployer, suivre [docs/deployment-guide.md](docs/deployment-guide.md)** : le guide pas à pas, de l'installation de `az` jusqu'au rollback, avec une vérification à chaque étape. Les sections ci-dessous en sont le résumé.
 
