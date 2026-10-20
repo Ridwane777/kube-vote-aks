@@ -1,0 +1,104 @@
+# Deploy the Poll application from a link:
+#   https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml
+#   → "Run workflow". Leave "tag" empty to build and deploy the current commit;
+#   set "tag" and tick "rollback" to redeploy an existing version without rebuilding.
+#
+# Azure access uses OpenID Connect (federated identity): no password or key is
+# stored anywhere. The IDs below are identifiers, not secrets.
+# Setup: docs/deployment-guide.md, step 12.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (empty = current commit)"
+        required: false
+        default: ""
+      rollback:
+        description: "Rollback: redeploy the existing tag without rebuilding"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # OIDC token for Azure
+  contents: read
+
+concurrency:
+  group: deploy     # never two deployments at the same time
+  cancel-in-progress: false
+
+env:
+  AZURE_CLIENT_ID: REPLACE_WITH_CLIENT_ID          # step 12 of the deployment guide
+  AZURE_TENANT_ID: 00000000-0000-0000-0000-000000000000
+  AZURE_SUBSCRIPTION_ID: 00000000-0000-0000-0000-000000000000
+  RESOURCE_GROUP: bernstein-spain-rg
+  CLUSTER: bernstein-aks
+  ACR_NAME: myregistry
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        env:
+          TAG: ${{ inputs.tag }}
+          ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          if [ "$AZURE_CLIENT_ID" = REPLACE_WITH_CLIENT_ID ]; then
+            echo "::error::AZURE_CLIENT_ID is not set: follow step 12 of docs/deployment-guide.md"
+            exit 1
+          fi
+          if [ "$ROLLBACK" = true ] && [ -z "$TAG" ]; then
+            echo "::error::A rollback needs the tag to redeploy"
+            exit 1
+          fi
+          # The tag ends up in image names: only allow characters valid there.
+          if [ -n "$TAG" ] && ! [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::Invalid tag: $TAG"
+            exit 1
+          fi
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Start the cluster if it is stopped
+        run: |
+          state="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER" --query powerState.code -o tsv)"
+          echo "Cluster power state: $state"
+          if [ "$state" = Stopped ]; then az aks start -g "$RESOURCE_GROUP" -n "$CLUSTER"; fi
+
+      - name: Get cluster credentials
+        run: az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER" --overwrite-existing
+
+      - name: Deploy
+        env:
+          TAG: ${{ inputs.tag }}
+          SKIP_BUILD: ${{ inputs.rollback && '1' || '0' }}
+        run: |
+          # Only used if the postgres-secret Secret does not exist yet (first
+          # deployment on a fresh cluster); it then lives only in Kubernetes.
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export POSTGRES_PASSWORD
+          scripts/deploy.sh
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "### Deployed"
+            echo "| Service | URL |"
+            echo "|---|---|"
+            for svc in poll result; do
+              ip="$(kubectl get svc "$svc" -n bernstein -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+              echo "| $svc | http://$ip |"
+            done
+            echo
+            echo "Images: \`$(kubectl get deploy poll -n bernstein -o jsonpath='{.spec.template.spec.containers[0].image}')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
