@@ -15,6 +15,7 @@ Ce guide va **d'un ordinateur vierge à l'application en ligne**, puis couvre la
 | 9 | [Mettre à jour sans coupure](#étape-9--mettre-à-jour-sans-coupure) | un membre | 5 min |
 | 10 | [Revenir à la version précédente](#étape-10--revenir-à-la-version-précédente-rollback) | un membre | 2 min |
 | 11 | [Arrêter, rallumer, supprimer](#étape-11--arrêter-rallumer-supprimer) | un membre | — |
+| 12 | [Déployer depuis un lien (GitHub Actions)](#étape-12--déployer-depuis-un-lien-github-actions) | configuration : le propriétaire de l'abonnement, une fois | 5 min |
 
 Les commandes sont pour **Linux (Ubuntu / Debian)**. Pour macOS et Windows, voir les encadrés de l'étape 1.
 
@@ -394,6 +395,73 @@ curl -I http://<ip-poll>/                                # attendre le 200 (≈ 
 kubectl delete namespace bernstein                 # l'application ET les votes (les IP changeront au prochain déploiement)
 az group delete -n bernstein-spain-rg --yes        # TOUT : cluster, registre, disques. Plus rien n'est facturé
 ```
+
+---
+
+## Étape 12 : Déployer depuis un lien (GitHub Actions)
+
+Le workflow [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) lance `scripts/deploy.sh` sur une machine de GitHub. Une fois configuré, on déploie **depuis un navigateur**, sans aucun outil installé :
+
+**https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml** → **Run workflow**
+
+| Champ | Effet |
+|---|---|
+| `tag` vide | Construit et déploie le commit actuel de `main` (tag = hash du commit) |
+| `tag` + case **rollback** cochée | Redéploie une version existante sans reconstruire |
+
+Le workflow rallume le cluster s'il est arrêté. À la fin, la page du run affiche un tableau avec les adresses de poll et de result.
+
+### 12.1 Configuration (une seule fois, par le propriétaire de l'abonnement)
+
+GitHub s'authentifie auprès d'Azure par **identité fédérée (OIDC)** : aucun mot de passe ni aucune clé n'est stocké, ni dans le dépôt, ni dans GitHub. L'identité n'est acceptée que pour la branche `main` de ce dépôt, et n'a des droits que sur le groupe `bernstein-spain-rg`.
+
+```sh
+RG=bernstein-spain-rg
+REPO=Ridwane777/bernstein
+
+# 1. Créer l'identité de GitHub dans Azure
+APP_ID=$(az ad app create --display-name bernstein-github-deploy --query appId -o tsv)
+az ad sp create --id "$APP_ID"
+
+# 2. N'accepter que les runs de la branche main de ce dépôt
+az ad app federated-credential create --id "$APP_ID" --parameters "{
+  \"name\": \"github-main\",
+  \"issuer\": \"https://token.actions.githubusercontent.com\",
+  \"subject\": \"repo:$REPO:ref:refs/heads/main\",
+  \"audiences\": [\"api://AzureADTokenExchange\"]
+}"
+
+# 3. Droits limités au groupe de ressources (cluster, registre)
+az role assignment create --assignee "$APP_ID" --role Contributor \
+  --scope "$(az group show -n $RG --query id -o tsv)"
+
+# 4. L'identifiant à reporter dans le workflow
+echo "$APP_ID"
+```
+
+Si l'étape 3 répond que l'identité est introuvable, attendre 30 s et la relancer : Azure met un moment à propager une nouvelle identité.
+
+Reporter ensuite l'identifiant affiché dans [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), à la ligne `AZURE_CLIENT_ID: REPLACE_WITH_CLIENT_ID`, puis commiter et pousser sur `main`. L'identifiant n'est pas un secret : sans la fédération de l'étape 2, il ne permet rien.
+
+### 12.2 Lancer un déploiement
+
+Depuis le lien ci-dessus (**Run workflow**), ou en ligne de commande :
+
+```sh
+gh workflow run deploy.yml                                   # commit actuel
+gh workflow run deploy.yml -f tag=<ancien-tag> -f rollback=true   # rollback
+gh run watch                                                 # suivre le run
+```
+
+### ✅ Vérification
+
+Le run est vert, et son résumé affiche les URL de poll et de result, ainsi que l'image déployée.
+
+| Échec | Cause | Que faire |
+|---|---|---|
+| `AZURE_CLIENT_ID is not set` | Étape 12.1 non terminée | Reporter l'identifiant dans le workflow |
+| `AADSTS70021` / `No matching federated identity` | Run lancé depuis une autre branche que `main` | Lancer depuis `main` |
+| `AuthorizationFailed` | Rôle non attribué | Refaire l'étape 3 de 12.1 |
 
 ---
 
