@@ -22,6 +22,7 @@ L'[ADR-0010](0010-deploiement-github-actions.md) a ajouté un déploiement depui
 
 **Option A**, `Jenkinsfile` à la racine :
 
+- **rien n'est installé dans Jenkins** : les étapes s'exécutent dans une image d'outils versionnée, `ci/Dockerfile` (`az`, `kubectl`, `envsubst`, `git`), lancée par le plugin *Docker Pipeline* avec le socket Docker de l'hôte. Le Jenkins existant (`jenkins/jenkins:lts`, socket et binaire Docker déjà montés, plugin déjà installé) n'est pas modifié ;
 - paramètres `TAG` (vide = commit actuel) et `ROLLBACK` (redéploiement sans reconstruction, `SKIP_BUILD=1`), le tag étant validé avant usage ;
 - connexion à Azure par un **service principal** avec le rôle *Contributor* limité au groupe `bernstein-spain-rg`. Son mot de passe est dans les *Credentials* de Jenkins (`azure-deploy-sp`), masqué dans les journaux, **jamais dans le dépôt** ;
 - l'état Azure et kubectl de chaque build est isolé dans un dossier temporaire, puis supprimé à la fin (`az logout`) ;
