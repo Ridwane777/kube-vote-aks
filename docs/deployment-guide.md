@@ -16,6 +16,7 @@ Ce guide va **d'un ordinateur vierge à l'application en ligne**, puis couvre la
 | 10 | [Revenir à la version précédente](#étape-10--revenir-à-la-version-précédente-rollback) | un membre | 2 min |
 | 11 | [Arrêter, rallumer, supprimer](#étape-11--arrêter-rallumer-supprimer) | un membre | — |
 | 12 | [Déployer depuis un lien (GitHub Actions)](#étape-12--déployer-depuis-un-lien-github-actions) | configuration : le propriétaire de l'abonnement, une fois | 5 min |
+| 13 | [Déployer depuis un lien (Jenkins)](#étape-13--déployer-depuis-un-lien-jenkins) | configuration : le propriétaire du Jenkins et de l'abonnement, une fois | 15 min |
 
 Les commandes sont pour **Linux (Ubuntu / Debian)**. Pour macOS et Windows, voir les encadrés de l'étape 1.
 
@@ -462,6 +463,70 @@ Le run est vert, et son résumé affiche les URL de poll et de result, ainsi que
 | `AZURE_CLIENT_ID is not set` | Étape 12.1 non terminée | Reporter l'identifiant dans le workflow |
 | `AADSTS70021` / `No matching federated identity` | Run lancé depuis une autre branche que `main` | Lancer depuis `main` |
 | `AuthorizationFailed` | Rôle non attribué | Refaire l'étape 3 de 12.1 |
+
+---
+
+## Étape 13 : Déployer depuis un lien (Jenkins)
+
+Alternative à l'étape 12 quand les minutes GitHub Actions de l'organisation sont épuisées ([ADR-0011](adr/0011-deploiement-jenkins.md)). Le [`Jenkinsfile`](../Jenkinsfile) à la racine du dépôt lance le même `scripts/deploy.sh`, sur notre serveur Jenkins.
+
+Lien : **`http://<serveur-jenkins>/job/bernstein-deploy/build`** → **Build with Parameters**
+
+| Paramètre | Effet |
+|---|---|
+| `TAG` vide | Construit et déploie le commit actuel de `main` |
+| `TAG` + `ROLLBACK` coché | Redéploie une version existante sans reconstruire |
+
+### 13.1 Préparer la machine Jenkins (une seule fois)
+
+L'agent Jenkins doit avoir les mêmes outils que l'étape 1, installés pour l'utilisateur qui exécute Jenkins (`jenkins` par défaut) :
+
+```sh
+# Sur le VPS, avec les commandes de l'étape 1 : az, docker, kubectl, envsubst, git, openssl
+sudo usermod -aG docker jenkins && sudo systemctl restart jenkins
+
+# Vérifier, en tant qu'utilisateur jenkins
+sudo -u jenkins bash -c 'az version -o none && docker ps >/dev/null && kubectl version --client && envsubst --version | head -1'
+```
+
+### 13.2 Créer l'identité Azure de Jenkins (une seule fois, par le propriétaire de l'abonnement)
+
+Jenkins se connecte à Azure avec un *service principal* : une identité avec mot de passe, dont les droits sont limités au groupe `bernstein-spain-rg`.
+
+```sh
+az ad sp create-for-rbac --name bernstein-jenkins-deploy --role Contributor \
+  --scopes "$(az group show -n bernstein-spain-rg --query id -o tsv)" \
+  --query "{appId:appId, password:password}" -o table
+```
+
+**Le mot de passe affiché est un secret.** Le copier **uniquement** dans Jenkins (13.3) : jamais dans le dépôt, dans un fichier ou dans un message. Il n'est affiché qu'une fois. S'il est perdu : `az ad sp credential reset --id <appId>`.
+
+### 13.3 Configurer Jenkins (une seule fois)
+
+1. **Identifiant Azure** : *Manage Jenkins → Credentials → System → Global → Add Credentials*
+   - Kind : **Username with password**
+   - Username : l'`appId` de 13.2
+   - Password : le `password` de 13.2
+   - ID : **`azure-deploy-sp`** (le `Jenkinsfile` l'attend sous ce nom)
+2. **Accès au dépôt GitHub** (privé) : *Add Credentials* → *Username with password*, avec un compte GitHub membre du dépôt et un **token personnel** (*GitHub → Settings → Developer settings → Personal access tokens*, droit de lecture sur le dépôt), ID `github-bernstein`.
+3. **Le job** : *New Item* → nom **`bernstein-deploy`** → **Pipeline** →
+   - *Pipeline* → Definition : **Pipeline script from SCM**
+   - SCM : Git, URL `https://github.com/Ridwane777/bernstein.git`, credentials `github-bernstein`, branche `*/main`
+   - Script Path : `Jenkinsfile`
+4. **Lancer une première fois** avec *Build Now*. Jenkins lit le `Jenkinsfile` et découvre les paramètres. Le bouton devient ensuite **Build with Parameters**.
+
+### ✅ Vérification
+
+Le build est vert. En fin de journal : les adresses publiques (`poll: http://…`, `result: http://…`) et l'image déployée.
+
+| Échec dans le journal | Cause | Que faire |
+|---|---|---|
+| `ERROR: azure-deploy-sp` / credentials introuvables | Identifiant mal nommé | Vérifier l'ID `azure-deploy-sp` (13.3) |
+| `az: command not found`, `docker: permission denied` | Outils absents pour l'utilisateur `jenkins` | 13.1 |
+| `AADSTS7000215: Invalid client secret` | Mot de passe incorrect ou expiré | `az ad sp credential reset`, puis mettre à jour l'identifiant Jenkins |
+| `AuthorizationFailed` | Rôle non attribué | Refaire 13.2 |
+
+**Sécurité :** l'interface Jenkins est exposée sur Internet, et quiconque peut lancer ce job peut déployer et allumer le cluster. Garder Jenkins à jour, désactiver l'inscription libre, et réserver le job aux membres du groupe.
 
 ---
 
