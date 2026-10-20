@@ -2,12 +2,20 @@
 // Leave TAG empty to build and deploy the current commit; set TAG and tick
 // ROLLBACK to redeploy an existing version without rebuilding.
 //
-// Jenkins agent needs: az, docker, kubectl, envsubst, git, openssl.
+// Steps run inside the tools image ci/Dockerfile (az, kubectl, envsubst, git),
+// built by Jenkins with the Docker Pipeline plugin. Images are built by the
+// host's Docker: its binary and socket are mounted, and 988 is the gid of the
+// host "docker" group that owns the socket (stat -c %g /var/run/docker.sock).
 // Jenkins credential "azure-deploy-sp" (Username with password):
 //   username = service principal appId, password = its secret.
 // Setup: docs/deployment-guide.md, step 13.
 pipeline {
-  agent any
+  agent {
+    dockerfile {
+      dir 'ci'
+      args '-v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker --group-add 988'
+    }
+  }
 
   parameters {
     string(name: 'TAG', defaultValue: '', description: 'Image tag (empty = current commit)')
@@ -27,8 +35,10 @@ pipeline {
     ACR_NAME              = 'myregistry'
     // Keep Azure and kubectl state per build, outside the agent's home and
     // outside the checkout (files there would make the git tag "-dirty").
+    HOME                  = "${WORKSPACE}@tmp/home"   // uid 1000 has no home in the image
     AZURE_CONFIG_DIR      = "${WORKSPACE}@tmp/azure"
     KUBECONFIG            = "${WORKSPACE}@tmp/kube/config"
+    DOCKER_CONFIG         = "${WORKSPACE}@tmp/docker"  // ACR login token
   }
 
   stages {
@@ -36,6 +46,7 @@ pipeline {
       steps {
         sh '''#!/bin/bash
           set -euo pipefail
+          mkdir -p "$HOME"
           if [ "$ROLLBACK" = true ] && [ -z "$TAG" ]; then
             echo "A rollback needs the TAG to redeploy" >&2; exit 1
           fi
@@ -98,7 +109,7 @@ pipeline {
     }
     always {
       // Do not leave Azure or cluster credentials on the agent.
-      sh 'az logout || true; rm -rf "$AZURE_CONFIG_DIR" "$(dirname "$KUBECONFIG")"'
+      sh 'az logout || true; rm -rf "$AZURE_CONFIG_DIR" "$(dirname "$KUBECONFIG")" "$DOCKER_CONFIG" "$HOME"'
     }
   }
 }
