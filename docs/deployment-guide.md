@@ -472,7 +472,7 @@ Le run est vert, et son résumé affiche les URL de poll et de result, ainsi que
 
 Alternative à l'étape 12 quand les minutes GitHub Actions de l'organisation sont épuisées ([ADR-0011](adr/0011-deploiement-jenkins.md)). Le [`Jenkinsfile`](../Jenkinsfile) à la racine du dépôt lance le même `scripts/deploy.sh`, sur notre serveur Jenkins.
 
-Lien : **`http://<serveur-jenkins>/job/bernstein-deploy/build`** → **Build with Parameters**
+Lien : **http://jenkins.example.com:8090/job/bernstein-deploy/build** → **Build with Parameters** (connexion à Jenkins requise : l'accès anonyme est désactivé)
 
 | Paramètres | Effet |
 |---|---|
