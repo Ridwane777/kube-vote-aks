@@ -34,7 +34,7 @@ pipeline {
     AZURE_TENANT_ID       = '00000000-0000-0000-0000-000000000000'
     AZURE_SUBSCRIPTION_ID = '00000000-0000-0000-0000-000000000000'
     RESOURCE_GROUP        = 'bernstein-spain-rg'
-    CLUSTER               = 'bernstein-aks'
+    CLUSTER               = 'bernstein-aks-2'
     ACR_NAME              = 'myregistry'
     // Keep Azure and kubectl state per build, outside the agent's home and
     // outside the checkout (files there would make the git tag "-dirty").
