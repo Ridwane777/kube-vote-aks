@@ -28,6 +28,8 @@ poll ──► redis ──► worker ──► postgres ◄── result
 
 ## Procédure complète
 
+> **Déployer depuis un lien :** [Actions → Deploy → Run workflow](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml), après la configuration de l'[étape 12 du guide](docs/deployment-guide.md#étape-12--déployer-depuis-un-lien-github-actions).
+>
 > **Pour déployer, suivre [docs/deployment-guide.md](docs/deployment-guide.md)** : le guide pas à pas, de l'installation de `az` jusqu'au rollback, avec une vérification à chaque étape. Les sections ci-dessous en sont le résumé.
 
 | Étape | Qui | Section |
