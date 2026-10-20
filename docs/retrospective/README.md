@@ -52,5 +52,6 @@ Un regard sur **l'ensemble du projet**, du bootstrap au déploiement mesuré : c
 | ✅ | Ressources ajustées : limite mémoire de poll 256 Mi, demande du worker 128 Mi, `requests` de PostgreSQL et Redis (2026-10-18) | [docs/performance](../performance/README.md) |
 | ✅ | Tags fixés : `redis:8.10.2`, `postgres:18.6` (2026-10-18) | [docs/dependencies.md](../dependencies.md) |
 | ✅ | PodDisruptionBudgets sur poll et result, `k8s/60-disruption-budgets.yaml` (2026-10-18) | [ADR-0008](../adr/0008-mises-a-jour-sans-coupure-et-ressources.md) |
-| 5 | Passer à Kustomize, puis à une CI/CD GitHub Actions | ADR à écrire |
+| ✅ | Déploiement depuis un lien : Jenkins (testé), GitHub Actions prêt mais minutes épuisées (2026-10-20) | [ADR-0010](../adr/0010-deploiement-github-actions.md), [ADR-0011](../adr/0011-deploiement-jenkins.md) |
+| 5 | Passer à Kustomize | ADR à écrire |
 | 6 | Mettre en place HTTPS et la sauvegarde de PostgreSQL avant toute utilisation réelle | [docs/legal](../legal/README.md) |
