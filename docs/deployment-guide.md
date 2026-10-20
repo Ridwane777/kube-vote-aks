@@ -377,6 +377,8 @@ Même commande qu'à l'étape 9 : les images portent l'ancien tag, et la page af
 az aks stop -g bernstein-spain-rg -n bernstein-aks
 ```
 
+Ou sans terminal : Jenkins → **Build with Parameters** → `ACTION` = **stop** (étape 13). `ACTION` = **start** rallume le cluster de la même façon.
+
 Les pages ne répondent plus. L'application, le mot de passe et les votes sont conservés. Il reste environ 1 €/jour facturé (IP, registre, disque), voir [docs/costs](costs/README.md).
 
 ### Rallumer une application déjà déployée
@@ -472,10 +474,12 @@ Alternative à l'étape 12 quand les minutes GitHub Actions de l'organisation so
 
 Lien : **`http://<serveur-jenkins>/job/bernstein-deploy/build`** → **Build with Parameters**
 
-| Paramètre | Effet |
+| Paramètres | Effet |
 |---|---|
-| `TAG` vide | Construit et déploie le commit actuel de `main` |
-| `TAG` + `ROLLBACK` coché | Redéploie une version existante sans reconstruire |
+| `ACTION` = **deploy**, `TAG` vide | Rallume le cluster si besoin, construit et déploie le commit actuel de `main` |
+| `ACTION` = **deploy**, `TAG` + `ROLLBACK` coché | Redéploie une version existante sans reconstruire |
+| `ACTION` = **stop** | **Arrête le cluster** (fin de séance, ≈ 3,3 €/jour économisés) |
+| `ACTION` = **start** | Rallume le cluster sans redéployer, et attend que les pages répondent |
 
 ### 13.1 Prérequis du serveur Jenkins (vérifiés sur notre VPS le 2026-10-20)
 
