@@ -477,17 +477,16 @@ Lien : **`http://<serveur-jenkins>/job/bernstein-deploy/build`** → **Build wit
 | `TAG` vide | Construit et déploie le commit actuel de `main` |
 | `TAG` + `ROLLBACK` coché | Redéploie une version existante sans reconstruire |
 
-### 13.1 Préparer la machine Jenkins (une seule fois)
+### 13.1 Prérequis du serveur Jenkins (vérifiés sur notre VPS le 2026-10-20)
 
-L'agent Jenkins doit avoir les mêmes outils que l'étape 1, installés pour l'utilisateur qui exécute Jenkins (`jenkins` par défaut) :
+**Rien n'est installé dans Jenkins.** Les étapes du pipeline s'exécutent dans une image d'outils, [`ci/Dockerfile`](../ci/Dockerfile) (`az`, `kubectl`, `envsubst`, `git`, `openssl`), que Jenkins construit lui-même au premier build. Il faut seulement que :
 
-```sh
-# Sur le VPS, avec les commandes de l'étape 1 : az, docker, kubectl, envsubst, git, openssl
-sudo usermod -aG docker jenkins && sudo systemctl restart jenkins
-
-# Vérifier, en tant qu'utilisateur jenkins
-sudo -u jenkins bash -c 'az version -o none && docker ps >/dev/null && kubectl version --client && envsubst --version | head -1'
-```
+| Prérequis | Sur notre VPS | Vérification |
+|---|---|---|
+| Plugins *Pipeline*, *Git*, *Credentials Binding*, **Docker Pipeline** | ✅ installés | *Manage Jenkins → Plugins → Installed* |
+| Jenkins accède au Docker de l'hôte (socket et binaire montés dans son conteneur) | ✅ `jenkins/jenkins:lts` lancé avec `-v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker` | `docker exec jenkins docker version` |
+| L'utilisateur `jenkins` est dans le groupe propriétaire du socket | ✅ groupe `988` | `stat -c %g /var/run/docker.sock` sur l'hôte. Si le résultat n'est pas `988`, mettre ce nombre dans `--group-add` du `Jenkinsfile` |
+| ≈ 2 Go de disque pour l'image d'outils, assez de mémoire pour Maven | ✅ 8 vCPU, 23 Go de RAM | — |
 
 ### 13.2 Créer l'identité Azure de Jenkins (une seule fois, par le propriétaire de l'abonnement)
 
