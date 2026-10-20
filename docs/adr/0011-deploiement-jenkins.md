@@ -1,6 +1,6 @@
 # ADR-0011 : Déploiement déclenché depuis Jenkins
 
-- **Statut :** Accepté, configuration en attente (étape 13 du guide)
+- **Statut :** Accepté, configuré et testé le 2026-10-20 (build `80cb6c5` réussi)
 - **Date :** 2026-10-20
 - **Décideurs :** Ridwane
 - **Complète :** [ADR-0010](0010-deploiement-github-actions.md). Le workflow GitHub Actions est conservé et redevient utilisable dès que l'organisation dispose de nouveau de minutes.
