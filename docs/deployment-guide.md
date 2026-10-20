@@ -516,6 +516,8 @@ az ad sp create-for-rbac --name bernstein-jenkins-deploy --role Contributor \
 
 ### ✅ Vérification
 
+Testé le 2026-10-20 : build réussi, `80cb6c5` déployé sur poll, worker et result. Au tout premier build, Jenkins ne connaît pas encore les paramètres (il les découvre dans le `Jenkinsfile`), qui prennent alors leurs valeurs par défaut.
+
 Le build est vert. En fin de journal : les adresses publiques (`poll: http://…`, `result: http://…`) et l'image déployée.
 
 | Échec dans le journal | Cause | Que faire |
