@@ -120,7 +120,7 @@ Le compte et l'abonnement affichés doivent être ceux du groupe. **Vérifier av
 RG=bernstein-spain-rg          # groupe de ressources
 LOCATION=spaincentral          # région
 ACR_NAME=myregistry      # registre : lettres et chiffres, UNIQUE dans tout Azure
-CLUSTER=bernstein-aks          # cluster
+CLUSTER=bernstein-aks-2          # cluster
 ```
 
 Si le nom du registre est déjà pris (erreur à l'étape 4.4), en choisir un autre. Il faudra le réutiliser à l'étape 7.
@@ -217,7 +217,7 @@ az role assignment list --scope "$(az group show -n $RG --query id -o tsv)" --qu
 
 ```sh
 az account set --subscription <id-de-l-abonnement>    # celui transmis à l'étape 5
-az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2
 ```
 
 Cette commande écrit l'accès au cluster dans `~/.kube/config`.
@@ -301,7 +301,7 @@ Si `curl` ne répond pas tout de suite, attendre 1 à 2 minutes : le Load Balanc
 |---|---|---|
 | `error: docker is not installed` / `envsubst …` | — | Étape 1 incomplète |
 | `unauthorized` au `docker push` | `az acr login -n $ACR_NAME` | Pas de droit sur le registre (étape 5) |
-| Pod en `ImagePullBackOff` | `kubectl describe pod <pod> -n bernstein` | Cluster non relié au registre : `az aks update -g bernstein-spain-rg -n bernstein-aks --attach-acr $ACR_NAME` |
+| Pod en `ImagePullBackOff` | `kubectl describe pod <pod> -n bernstein` | Cluster non relié au registre : `az aks update -g bernstein-spain-rg -n bernstein-aks-2 --attach-acr $ACR_NAME` |
 | Pod en `CrashLoopBackOff` | `kubectl logs <pod> -n bernstein` | Base injoignable ou mot de passe incohérent |
 | `CreateContainerConfigError` | `kubectl describe pod <pod> -n bernstein` | Secret manquant : relancer avec `POSTGRES_PASSWORD` défini |
 | `EXTERNAL-IP` en `<pending>` | `kubectl get svc -n bernstein -w` | Attendre ; Azure est en train de créer l'IP |
@@ -389,7 +389,7 @@ Même commande qu'à l'étape 9 : les images portent l'ancien tag, et la page af
 ### Arrêter (à faire après chaque séance : le cluster allumé coûte ≈ 4,3 €/jour)
 
 ```sh
-az aks stop -g bernstein-spain-rg -n bernstein-aks
+az aks stop -g bernstein-spain-rg -n bernstein-aks-2
 ```
 
 Ou sans terminal : Jenkins → **Build with Parameters** → `ACTION` = **stop** (étape 13). `ACTION` = **start** rallume le cluster de la même façon.
@@ -399,7 +399,7 @@ Les pages ne répondent plus. L'application, le mot de passe et les votes sont c
 ### Rallumer une application déjà déployée
 
 ```sh
-az aks start -g bernstein-spain-rg -n bernstein-aks      # quelques minutes
+az aks start -g bernstein-spain-rg -n bernstein-aks-2      # quelques minutes
 kubectl get pods -n bernstein -w                         # attendre 7 pods Running 1/1, puis Ctrl+C
 kubectl get svc -n bernstein                             # mêmes IP qu'avant
 curl -I http://<ip-poll>/                                # attendre le 200 (≈ 1 à 2 min après le démarrage)
@@ -554,7 +554,7 @@ Le build est vert. En fin de journal : les adresses publiques (`poll: http://…
 
 ```sh
 # Une fois par machine
-az login && az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+az login && az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2
 
 # Premier déploiement
 ACR_NAME=myregistry POSTGRES_PASSWORD="$(openssl rand -hex 24)" scripts/deploy.sh
@@ -564,6 +564,6 @@ ACR_NAME=myregistry TAG=v2 scripts/deploy.sh
 ACR_NAME=myregistry TAG=<ancien-tag> SKIP_BUILD=1 scripts/deploy.sh
 
 # Fin / début de séance
-az aks stop  -g bernstein-spain-rg -n bernstein-aks
-az aks start -g bernstein-spain-rg -n bernstein-aks
+az aks stop  -g bernstein-spain-rg -n bernstein-aks-2
+az aks start -g bernstein-spain-rg -n bernstein-aks-2
 ```
