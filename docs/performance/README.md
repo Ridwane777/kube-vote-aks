@@ -151,15 +151,16 @@ Même scénario, avec le HPA de l'[ADR-0012](../adr/0012-autoscaling-hpa-poll-re
 | Fin du test | 1 % / 3 | 2 % / 2 |
 | ≈ 2 min après la fin | 2 % / **3 → 2** | 2 % / 2 |
 
-| Mesure | 2026-10-18 (2 pods fixes) | **2026-10-28 (HPA)** |
-|---|---|---|
-| Requêtes | 14 793 | 14 343 (79 req/s) |
-| Erreurs | 0 | **18 (0,12 %)** |
-| Latence p95 | 260 ms | **535 ms** (seuil 500 ms ❌), max 3,76 s |
+| Mesure | 2026-10-18 (2 pods fixes) | HPA, 1ᵉʳ essai (cluster tout juste rallumé) | **HPA, 2ᵉ essai (20 min plus tard)** |
+|---|---|---|---|
+| Requêtes | 14 793 | 14 343 (79 req/s) | **16 836 (93 req/s)** |
+| Erreurs | 0 | 18 (0,12 %) | **0** |
+| Latence p95 | 260 ms | 535 ms (seuil 500 ms ❌), max 3,76 s | **170 ms** ✅, max 1,01 s |
+| poll | 2 pods | 95 % → 3 pods | 90 % → 3 pods |
 
 - Le HPA fonctionne dans les deux sens : montée à 3 pods sous charge, retour à 2 après la fenêtre de stabilisation de 120 s.
 - result reste à 2 : il consomme peu, la cible n'est pas atteinte.
-- **Dégradation non expliquée** (erreurs et p95) : elle peut venir du cluster tout juste rallumé, des pods poll recréés quelques minutes avant, ou du démarrage du 3ᵉ pod. Un test sur un cluster stabilisé départagera.
+- **Les erreurs du 1ᵉʳ essai ne se reproduisent pas** : refait 20 minutes plus tard sur le même cluster, le test donne 0 erreur et un p95 de 170 ms, avec la même montée à 3 pods. Le démarrage du 3ᵉ pod n'est donc pas en cause ; l'explication la plus probable est le cluster tout juste rallumé (nœuds et pods recréés quelques minutes avant). À retenir pour la démo : rallumer le cluster **au moins 15 minutes avant**.
 
 ### Autoscaling HPA (`73f6937`, 2026-10-28)
 
@@ -173,15 +174,16 @@ Même scénario, avec le HPA de l'[ADR-0012](../adr/0012-autoscaling-hpa-poll-re
 | Fin du test | 1 % / 3 | 2 % / 2 |
 | ≈ 2 min après la fin | 2 % / **3 → 2** | 2 % / 2 |
 
-| Mesure | 2026-10-18 (2 pods fixes) | **2026-10-28 (HPA)** |
-|---|---|---|
-| Requêtes | 14 793 | 14 343 (79 req/s) |
-| Erreurs | 0 | **18 (0,12 %)** |
-| Latence p95 | 260 ms | **535 ms** (seuil 500 ms ❌), max 3,76 s |
+| Mesure | 2026-10-18 (2 pods fixes) | HPA, 1ᵉʳ essai (cluster tout juste rallumé) | **HPA, 2ᵉ essai (20 min plus tard)** |
+|---|---|---|---|
+| Requêtes | 14 793 | 14 343 (79 req/s) | **16 836 (93 req/s)** |
+| Erreurs | 0 | 18 (0,12 %) | **0** |
+| Latence p95 | 260 ms | 535 ms (seuil 500 ms ❌), max 3,76 s | **170 ms** ✅, max 1,01 s |
+| poll | 2 pods | 95 % → 3 pods | 90 % → 3 pods |
 
 - Le HPA fonctionne dans les deux sens : montée à 3 pods sous charge, retour à 2 après la fenêtre de stabilisation de 120 s.
 - result reste à 2 : il consomme peu, la cible n'est pas atteinte.
-- **Dégradation non expliquée** (erreurs et p95) : elle peut venir du cluster tout juste rallumé, des pods poll recréés quelques minutes avant, ou du démarrage du 3ᵉ pod. Un test sur un cluster stabilisé départagera.
+- **Les erreurs du 1ᵉʳ essai ne se reproduisent pas** : refait 20 minutes plus tard sur le même cluster, le test donne 0 erreur et un p95 de 170 ms, avec la même montée à 3 pods. Le démarrage du 3ᵉ pod n'est donc pas en cause ; l'explication la plus probable est le cluster tout juste rallumé (nœuds et pods recréés quelques minutes avant). À retenir pour la démo : rallumer le cluster **au moins 15 minutes avant**.
 
 ## Limites
 
