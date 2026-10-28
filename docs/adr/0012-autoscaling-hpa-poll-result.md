@@ -44,7 +44,7 @@ Le HPA calcule l'utilisation **par rapport à la request CPU**. Une request trop
 - **Migration d'un cluster existant** : retirer `replicas` d'un Deployment déjà créé par `kubectl apply` le ramène **une fois à 1 pod** avant que le HPA le remonte. On l'a évité en effaçant d'abord le champ de l'annotation `last-applied` (`kubectl apply set-last-applied`, voir le guide de déploiement). Un cluster neuf n'est pas concerné.
 - **Réaction en environ 1 minute** (collecte des métriques, toutes les 15 s, plus démarrage du pod) : un pic très bref passe avant que le pod en plus soit prêt.
 - **result et l'affinité `ClientIP`** : un nouveau pod ne reçoit que de nouveaux clients. À la redescente, les navigateurs branchés sur le pod supprimé se reconnectent (Socket.IO en polling). Un public derrière un même NAT reste sur un seul pod, quel que soit le nombre de pods.
-- Pendant le test, **18 requêtes sur 14 343 ont échoué (0,12 %)** et la latence p95 a été de 535 ms (seuil 500 ms), contre 0 erreur et 260 ms le 2026-10-18. Cause non identifiée : le cluster venait d'être rallumé et les pods poll recréés. À remesurer.
+- Au 1ᵉʳ test, juste après le rallumage du cluster, **18 requêtes sur 14 343 ont échoué (0,12 %)**, avec un p95 de 535 ms. Refait 20 minutes plus tard : **0 erreur sur 16 836, p95 170 ms**, même montée à 3 pods. Les erreurs viennent probablement du cluster pas encore stabilisé, pas du HPA.
 
 ### Quand changer
 
