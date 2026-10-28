@@ -421,7 +421,7 @@ Machine locale ──docker build──► image ──docker push──► ACR 
 
 Le cluster a été relié au registre avec `--attach-acr` : les nœuds s'authentifient avec leur **identité managée** Azure, sans mot de passe ni Secret de registre dans Kubernetes.
 
-**ACR ne stocke que des images**, pas les données ni les disques. Les disques des PVC sont des *Managed Disks* Azure, dans le resource group technique `MC_bernstein-spain-rg_bernstein-aks_spaincentral`.
+**ACR ne stocke que des images**, pas les données ni les disques. Les disques des PVC sont des *Managed Disks* Azure, dans le resource group technique `MC_bernstein-spain-rg_bernstein-aks-2_spaincentral`.
 
 ---
 
@@ -431,9 +431,9 @@ Le cluster a été relié au registre avec `--attach-acr` : les nœuds s'authent
 
 | Commande | Effet |
 |---|---|
-| `az aks get-credentials -g bernstein-spain-rg -n bernstein-aks` | Ajoute le cluster au kubeconfig local |
-| `az aks stop -g bernstein-spain-rg -n bernstein-aks` | Éteint les nœuds (ne paie plus les VM) |
-| `az aks start -g bernstein-spain-rg -n bernstein-aks` | Les rallume (les objets et les disques sont conservés) |
+| `az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2` | Ajoute le cluster au kubeconfig local |
+| `az aks stop -g bernstein-spain-rg -n bernstein-aks-2` | Éteint les nœuds (ne paie plus les VM) |
+| `az aks start -g bernstein-spain-rg -n bernstein-aks-2` | Les rallume (les objets et les disques sont conservés) |
 
 Les choix de plateforme et de région sont dans l'[ADR-0001](adr/0001-plateforme-aks-acr.md) et l'[ADR-0002](adr/0002-region-spain-central.md).
 
