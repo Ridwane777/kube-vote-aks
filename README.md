@@ -74,7 +74,7 @@ Notre configuration et ses raisons sont dans l'[ADR-0001](docs/adr/0001-platefor
 az login
 az account show --query "{abonnement:name, compte:user.name}"   # vérifier le bon compte
 
-RG=bernstein-spain-rg; LOCATION=spaincentral; ACR_NAME=myregistry; CLUSTER=bernstein-aks
+RG=bernstein-spain-rg; LOCATION=spaincentral; ACR_NAME=myregistry; CLUSTER=bernstein-aks-2
 
 # 1. Vérifier ce que l'abonnement autorise (régions, tailles de VM, quota)
 az policy assignment list --query "[].displayName" -o tsv
@@ -122,7 +122,7 @@ L'autre membre, sur **sa** machine :
 ```sh
 az login                                   # avec son propre compte
 az account set --subscription <id-de-l-abonnement>
-az aks get-credentials -g bernstein-spain-rg -n bernstein-aks
+az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2
 kubectl get nodes
 ```
 
