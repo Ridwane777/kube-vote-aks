@@ -273,6 +273,21 @@ kubectl get pods -n bernstein
 Il faut **7 pods `Running` et `1/1`** : `poll` ×2, `result` ×2, `worker`, `redis`, `postgres-0`.
 
 ```sh
+kubectl get hpa -n bernstein            # poll et result : MINPODS 2, MAXPODS 4, cible 70 %
+```
+
+Au repos, il y a 2 pods poll et 2 pods result ; sous charge, le HPA en ajoute jusqu'à 4 ([ADR-0012](adr/0012-autoscaling-hpa-poll-result.md)). `cpu: <unknown>` pendant la première minute est normal, le temps que les métriques arrivent.
+
+> **Cluster déployé avant l'ADR-0012** (les Deployments avaient `replicas: 2`) : avant le premier `scripts/deploy.sh`, retirer ce champ de l'annotation `last-applied`, sinon poll et result tombent une fois à 1 pod :
+>
+> ```sh
+> export REGISTRY=$ACR_NAME.azurecr.io TAG=$(git rev-parse --short HEAD)
+> for f in k8s/30-poll.yaml k8s/50-result.yaml; do
+>   envsubst '${REGISTRY} ${TAG}' < "$f" | kubectl apply set-last-applied -f -
+> done
+> ```
+
+```sh
 kubectl get svc -n bernstein            # EXTERNAL-IP de poll et de result
 curl -I http://<ip-poll>/               # HTTP/1.1 200 OK
 curl -I http://<ip-result>/             # HTTP/1.1 200 OK
