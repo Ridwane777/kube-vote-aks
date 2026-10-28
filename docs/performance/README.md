@@ -139,6 +139,50 @@ Même scénario, sur un déploiement fait **de zéro** (namespace supprimé, pui
 - La latence est un peu plus élevée qu'avec `v3` : le transport polling de Socket.IO fait plus de requêtes. Elle reste dans le seuil.
 - La table `votes` a été vidée après le test (4 933 lignes de test).
 
+### Autoscaling HPA (`73f6937`, 2026-10-28)
+
+Même scénario, avec le HPA de l'[ADR-0012](../adr/0012-autoscaling-hpa-poll-result.md) (2 à 4 pods, cible 70 % CPU, request de poll à 100m), juste après avoir rallumé le cluster. Évolution relevée avec `kubectl get hpa -n bernstein` toutes les 15 s :
+
+| Moment | poll (CPU / pods) | result (CPU / pods) |
+|---|---|---|
+| Début du test | 5 % / 2 | 5 % / 2 |
+| Montée à 50 utilisateurs | 42 % / 2 | 18 % / 2 |
+| 100 utilisateurs | **95 % / 2 → 3** | 30 % / 2 |
+| Fin du test | 1 % / 3 | 2 % / 2 |
+| ≈ 2 min après la fin | 2 % / **3 → 2** | 2 % / 2 |
+
+| Mesure | 2026-10-18 (2 pods fixes) | **2026-10-28 (HPA)** |
+|---|---|---|
+| Requêtes | 14 793 | 14 343 (79 req/s) |
+| Erreurs | 0 | **18 (0,12 %)** |
+| Latence p95 | 260 ms | **535 ms** (seuil 500 ms ❌), max 3,76 s |
+
+- Le HPA fonctionne dans les deux sens : montée à 3 pods sous charge, retour à 2 après la fenêtre de stabilisation de 120 s.
+- result reste à 2 : il consomme peu, la cible n'est pas atteinte.
+- **Dégradation non expliquée** (erreurs et p95) : elle peut venir du cluster tout juste rallumé, des pods poll recréés quelques minutes avant, ou du démarrage du 3ᵉ pod. Un test sur un cluster stabilisé départagera.
+
+### Autoscaling HPA (`73f6937`, 2026-10-28)
+
+Même scénario, avec le HPA de l'[ADR-0012](../adr/0012-autoscaling-hpa-poll-result.md) (2 à 4 pods, cible 70 % CPU, request de poll à 100m), juste après avoir rallumé le cluster. Évolution relevée avec `kubectl get hpa -n bernstein` toutes les 15 s :
+
+| Moment | poll (CPU / pods) | result (CPU / pods) |
+|---|---|---|
+| Début du test | 5 % / 2 | 5 % / 2 |
+| Montée à 50 utilisateurs | 42 % / 2 | 18 % / 2 |
+| 100 utilisateurs | **95 % / 2 → 3** | 30 % / 2 |
+| Fin du test | 1 % / 3 | 2 % / 2 |
+| ≈ 2 min après la fin | 2 % / **3 → 2** | 2 % / 2 |
+
+| Mesure | 2026-10-18 (2 pods fixes) | **2026-10-28 (HPA)** |
+|---|---|---|
+| Requêtes | 14 793 | 14 343 (79 req/s) |
+| Erreurs | 0 | **18 (0,12 %)** |
+| Latence p95 | 260 ms | **535 ms** (seuil 500 ms ❌), max 3,76 s |
+
+- Le HPA fonctionne dans les deux sens : montée à 3 pods sous charge, retour à 2 après la fenêtre de stabilisation de 120 s.
+- result reste à 2 : il consomme peu, la cible n'est pas atteinte.
+- **Dégradation non expliquée** (erreurs et p95) : elle peut venir du cluster tout juste rallumé, des pods poll recréés quelques minutes avant, ou du démarrage du 3ᵉ pod. Un test sur un cluster stabilisé départagera.
+
 ## Limites
 
 - **Échantillon réduit** pour les tests de mise à jour : quelques centaines de requêtes, depuis un seul client, sur quelques essais. Ces mesures montrent que les correctifs fonctionnent, elles ne prouvent pas un taux d'erreur nul.
