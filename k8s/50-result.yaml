@@ -22,7 +22,8 @@ metadata:
   name: result
   namespace: bernstein
 spec:
-  replicas: 2
+  # No "replicas": the HorizontalPodAutoscaler (70-autoscaling.yaml) owns the
+  # count. A fixed value here would reset it on every kubectl apply.
   strategy:
     type: RollingUpdate
     rollingUpdate:
