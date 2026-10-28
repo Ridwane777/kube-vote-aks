@@ -17,7 +17,8 @@ metadata:
   name: poll
   namespace: bernstein
 spec:
-  replicas: 2
+  # No "replicas": the HorizontalPodAutoscaler (70-autoscaling.yaml) owns the
+  # count. A fixed value here would reset it on every kubectl apply.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -71,7 +72,7 @@ spec:
             timeoutSeconds: 2
           resources:
             requests:
-              cpu: 50m
+              cpu: 100m
               memory: 96Mi
             limits:
               memory: 256Mi
