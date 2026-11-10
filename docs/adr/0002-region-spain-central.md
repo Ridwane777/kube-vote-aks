@@ -1,56 +1,56 @@
-# ADR-0002 : Région Spain Central et resource group `bernstein-spain-rg`
+# ADR-0002: Spain Central region and `bernstein-spain-rg` resource group
 
-- **Statut :** Accepté
-- **Date :** 2026-10-15
-- **Décideurs :** Ridwane
-- **Remplace :** [ADR-0001](0001-plateforme-aks-acr.md), pour la région et le resource group uniquement. Le choix AKS + ACR, le tier Free et les 2 nœuds `Standard_B2als_v2` restent valables.
+- **Status:** Accepted
+- **Date:** 2026-10-15
+- **Deciders:** Ridwane777
+- **Supersedes:** [ADR-0001](0001-platform-aks-acr.md), for the region and resource group only. The AKS + ACR choice, the Free tier and the 2 `Standard_B2als_v2` nodes still stand.
 
-## Contexte
+## Context
 
-L'ADR-0001 prévoyait AKS et ACR en **Poland Central**, dans le resource group `bernstein-rg`. La création a échoué plusieurs fois, pour trois raisons différentes :
+ADR-0001 planned AKS and ACR in **Poland Central**, in the `bernstein-rg` resource group. Creation failed several times, for three different reasons:
 
-| Région | Résultat | Cause (message Azure) |
+| Region | Result | Cause (Azure message) |
 |---|---|---|
-| Poland Central | ❌ ACR refusé | `RequestDisallowedByAzure` : la politique d'abonnement *Allowed resource deployment regions* n'autorise que `swedencentral`, `austriaeast`, `germanywestcentral`, `spaincentral`, `italynorth`. Le resource group, lui, avait pu être créé en Poland Central |
-| Germany West Central | ❌ AKS refusé | `BadRequest` : aucune taille de série B autorisée pour AKS ; les tailles D/F v6-v7 proposées ont un quota de **0 vCPU** |
-| Sweden Central | ❌ AKS en échec | `AllocationFailed` : capacité `B2als_v2` insuffisante dans la région au moment de la création |
-| Italy North | non testé | Aucune taille B2 disponible (`az vm list-skus`) |
-| Austria East | non testé | Tailles B2 v2 disponibles, gardé en réserve |
-| **Spain Central** | ✅ | Création AKS réussie |
+| Poland Central | ❌ ACR rejected | `RequestDisallowedByAzure`: the *Allowed resource deployment regions* subscription policy only allows `swedencentral`, `austriaeast`, `germanywestcentral`, `spaincentral`, `italynorth`. The resource group itself could be created in Poland Central |
+| Germany West Central | ❌ AKS rejected | `BadRequest`: no B-series size allowed for AKS; the proposed D/F v6-v7 sizes have a quota of **0 vCPU** |
+| Sweden Central | ❌ AKS failed | `AllocationFailed`: not enough `B2als_v2` capacity in the region at creation time |
+| Italy North | not tested | No B2 size available (`az vm list-skus`) |
+| Austria East | not tested | B2 v2 sizes available, kept in reserve |
+| **Spain Central** | ✅ | AKS created successfully |
 
-Pendant ces essais, le resource group `bernstein-rg` a été supprimé depuis le portail. Pour ne pas attendre la fin de sa suppression, un nouveau groupe a été créé.
+During these attempts the `bernstein-rg` resource group was deleted from the portal. To avoid waiting for the deletion to finish, a new group was created.
 
-## Options envisagées
+## Options considered
 
-1. **Spain Central**, même taille `B2als_v2`.
-2. **Austria East**, même taille.
-3. **Sweden Central** avec une taille plus grande (`B2s_v2`, 8 Go) : environ 2 fois plus cher par nœud.
-4. Réessayer Sweden Central plus tard : délai inconnu.
-5. Demander une augmentation de quota D/F en Germany West Central : réponse incertaine sur Azure for Students.
+1. **Spain Central**, same `B2als_v2` size.
+2. **Austria East**, same size.
+3. **Sweden Central** with a larger size (`B2s_v2`, 8 GB): about twice the price per node.
+4. Retry Sweden Central later: unknown delay.
+5. Request a D/F quota increase in Germany West Central: uncertain answer on this subscription type.
 
-## Décision
+## Decision
 
-**Option 1 : tout en Spain Central, dans le nouveau resource group `bernstein-spain-rg`.**
+**Option 1: everything in Spain Central, in the new `bernstein-spain-rg` resource group.**
 
-- ACR : `myregistry.azurecr.io` (Basic) ;
-- AKS : `bernstein-aks`, Kubernetes 1.35, tier Free, 2 × `Standard_B2als_v2`, relié à l'ACR (`--attach-acr`).
+- ACR: `myregistry.azurecr.io` (Basic);
+- AKS: `bernstein-aks`, Kubernetes 1.35, Free tier, 2 × `Standard_B2als_v2`, attached to the ACR (`--attach-acr`).
 
-## Conséquences
+## Consequences
 
-### ✅ Gagné
+### ✅ Gained
 
-- Taille et coût prévus par l'ADR-0001 conservés.
-- ACR et AKS dans la même région : pas de frais de transfert entre régions pour le téléchargement des images.
-- Région dans l'UE, dans la liste autorisée de l'abonnement.
-- Austria East reste une solution de repli testée sur le papier.
+- Size and cost planned in ADR-0001 kept.
+- ACR and AKS in the same region: no inter-region transfer fees for image pulls.
+- EU region, in the subscription's allowed list.
+- Austria East remains a fallback, verified on paper.
 
-### ❌ Perdu / risques
+### ❌ Lost / risks
 
-- **Capacité non garantie** : un `az aks start` après un arrêt peut, comme en Suède, échouer faute de VM disponibles. Le cluster resterait alors arrêté jusqu'au retour de la capacité.
-- **Latence** depuis la France un peu plus élevée qu'avec l'Allemagne : négligeable pour cette application.
-- **Le nom du resource group change** : tous les scripts et la documentation doivent utiliser `bernstein-spain-rg`.
-- **Leçon retenue** : vérifier la politique de régions, les tailles autorisées **pour AKS** et le quota de la région **avant** d'écrire l'ADR de plateforme. À reporter dans la rétrospective.
+- **Capacity not guaranteed**: an `az aks start` after a stop can fail for lack of VMs, as in Sweden. The cluster would then stay stopped until capacity returns.
+- **Latency** from France slightly higher than from Germany: negligible for this application.
+- **The resource group name changes**: all scripts and docs must use `bernstein-spain-rg`.
+- **Lesson learned**: check the region policy, the sizes allowed **for AKS** and the regional quota **before** writing the platform ADR. Carried over to the retrospective.
 
-## Liens
+## Links
 
-- [ADR-0001](0001-plateforme-aks-acr.md)
+- [ADR-0001](0001-platform-aks-acr.md)

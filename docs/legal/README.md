@@ -1,57 +1,57 @@
-# Analyse légale
+# Legal analysis
 
-Ce document couvre les données traitées par l'application de vote, les risques juridiques et les mesures à prendre avant une mise en service publique. Le projet est un **projet pédagogique** (the school), déployé temporairement pour une démonstration. Une mise en production réelle exigerait les actions marquées « à faire ».
+This document covers the data processed by the voting application, the legal risks and the measures to take before a public launch. The project is a **portfolio project**, deployed temporarily for demonstrations. A real production launch would require the actions marked "to do".
 
-## Données traitées
+## Data processed
 
-Relevé dans le code et sur le déploiement (2026-10-15) :
+Surveyed in the code and on the deployment (2026-10-15):
 
-| Donnée | Où | Personnelle ? | Durée de conservation |
+| Data | Where | Personal? | Retention |
 |---|---|---|---|
-| `voter_id` : identifiant aléatoire (UUID) dans un cookie | Navigateur, Redis (en transit), PostgreSQL (`votes.id`) | **Oui, pseudonyme** (RGPD, considérant 26) : il identifie un navigateur | Cookie de session (pas de `Max-Age`, supprimé à la fermeture du navigateur). En base : **sans limite** |
-| Choix du vote (a, b, c ou d) | PostgreSQL (`votes.vote`) | Oui, rattaché au `voter_id` | Sans limite |
-| Adresse IP du visiteur | Connexions TCP vers le Load Balancer Azure et les pods | Oui | Non journalisée par l'application : gunicorn et Express n'ont pas de journal d'accès activé |
-| Adresse IP envoyée aux CDN tiers | `ajax.googleapis.com` (AngularJS), `code.jquery.com` (jQuery), `maxcdn.bootstrapcdn.com` (Font Awesome) | Oui | Selon chaque fournisseur |
+| `voter_id`: random identifier (UUID) in a cookie | Browser, Redis (in transit), PostgreSQL (`votes.id`) | **Yes, pseudonymous** (GDPR, recital 26): it identifies a browser | Session cookie (no `Max-Age`, deleted when the browser closes). In the database: **no limit** |
+| Vote choice (a, b, c or d) | PostgreSQL (`votes.vote`) | Yes, linked to the `voter_id` | No limit |
+| Visitor IP address | TCP connections to the Azure Load Balancer and the pods | Yes | Not logged by the application: gunicorn and Express have no access log enabled |
+| IP address sent to third-party CDNs | `ajax.googleapis.com` (AngularJS), `code.jquery.com` (jQuery), `maxcdn.bootstrapcdn.com` (Font Awesome) | Yes | Per provider |
 
-Aucune donnée d'identité (nom, e-mail, compte) n'est collectée.
+No identity data (name, e-mail, account) is collected.
 
-## Risques et mesures
+## Risks and measures
 
-| # | Risque | Gravité | Mesure |
+| # | Risk | Severity | Measure |
 |---|---|---|---|
-| 1 | **Pas de HTTPS** : cookie et votes circulent en clair et peuvent être lus ou modifiés sur le réseau | Élevée | À faire : TLS (Ingress + cert-manager, voir [ADR-0004](../adr/0004-exposition-loadbalancer.md)), puis cookie `Secure` |
-| 2 | **Cookie sans `HttpOnly` ni `SameSite`** | Moyenne | À faire : `httponly=True, samesite='Lax'` dans `poll/app.py` |
-| 3 | **Transferts vers des CDN tiers** (Google, jQuery, BootstrapCDN) sans information du visiteur. Google est soumis au droit américain | Moyenne | À faire : servir ces fichiers depuis l'application, ou informer le visiteur dans la politique de confidentialité |
-| 4 | **Bibliothèques front obsolètes** : AngularJS 1.4.5 (fin de support fin 2021, failles XSS connues), `jquery-latest` (version figée ancienne) | Moyenne | À faire : mettre à jour ou supprimer les dépendances |
-| 5 | **Conservation sans limite** des votes | Faible | À faire : définir une durée (par ex. supprimer les votes 30 jours après la fin du scrutin) |
-| 6 | **Bannières techniques** : en-têtes `Server: gunicorn` et `X-Powered-By: Express` | Faible | À faire : les masquer (réduit les informations données à un attaquant) |
-| 7 | **Le vote n'est pas un vote certifié** : un même votant peut voter plusieurs fois en supprimant son cookie | Information | À indiquer dans les conditions d'utilisation : sondage indicatif, pas un scrutin officiel |
+| 1 | **No HTTPS**: cookie and votes travel in clear text and can be read or altered on the network | High | To do: TLS (Ingress + cert-manager, see [ADR-0004](../adr/0004-loadbalancer-exposure.md)), then a `Secure` cookie |
+| 2 | **Cookie without `HttpOnly` or `SameSite`** | Medium | To do: `httponly=True, samesite='Lax'` in `poll/app.py` |
+| 3 | **Transfers to third-party CDNs** (Google, jQuery, BootstrapCDN) without informing the visitor. Google is subject to US law | Medium | To do: serve these files from the application, or inform the visitor in the privacy policy |
+| 4 | **Outdated front-end libraries**: AngularJS 1.4.5 (end of support end of 2021, known XSS flaws), `jquery-latest` (old frozen version) | Medium | To do: update or remove these dependencies |
+| 5 | **Unlimited retention** of votes | Low | To do: define a period (e.g. delete votes 30 days after the poll closes) |
+| 6 | **Technical banners**: `Server: gunicorn` and `X-Powered-By: Express` headers | Low | To do: hide them (gives less information to an attacker) |
+| 7 | **The vote is not a certified ballot**: one voter can vote several times by deleting their cookie | Information | State it in the terms of use: indicative poll, not an official ballot |
 
-### Cookie et consentement
+### Cookie and consent
 
-Le cookie `voter_id` sert uniquement à ce qu'un navigateur n'ait qu'un vote, le dernier comptant. Il est nécessaire au service demandé par l'utilisateur. Selon la position de la CNIL sur les traceurs, il entre **probablement** dans l'exemption de consentement (article 82 de la loi Informatique et Libertés). L'information reste obligatoire : elle doit figurer dans la politique de confidentialité. Cette qualification est à confirmer si l'identifiant sert un jour à autre chose.
+The `voter_id` cookie is only used so that a browser has a single vote, the last one counting. It is necessary for the service requested by the user. Under the CNIL's position on trackers, it **probably** falls under the consent exemption (article 82 of the French Data Protection Act). Information remains mandatory: it must appear in the privacy policy. This qualification must be reviewed if the identifier is ever used for anything else.
 
-## Hébergement et sous-traitants
+## Hosting and processors
 
-| Sous-traitant | Rôle | Localisation |
+| Processor | Role | Location |
 |---|---|---|
-| Microsoft Azure | Cluster AKS, registre ACR, disques, IP publiques | **Spain Central** (Union européenne), voir [ADR-0002](../adr/0002-region-spain-central.md) |
-| Google, jQuery Foundation (StackPath), BootstrapCDN | Fichiers JavaScript et CSS chargés par le navigateur | Hors contrôle du projet |
+| Microsoft Azure | AKS cluster, ACR registry, disks, public IPs | **Spain Central** (European Union), see [ADR-0002](../adr/0002-region-spain-central.md) |
+| Google, jQuery Foundation (StackPath), BootstrapCDN | JavaScript and CSS files loaded by the browser | Outside the project's control |
 
-## Projet de politique de confidentialité
+## Draft privacy policy
 
-> **Qui traite vos données ?** L'équipe du projet Bernstein (the school), dans le cadre d'un projet pédagogique.
+> **Who processes your data?** Ridwane777, author of the Kube Vote AKS project, as part of a portfolio demonstration.
 >
-> **Quelles données ?** Un identifiant aléatoire stocké dans un cookie de session, et votre choix de vote. Aucune donnée permettant de vous identifier directement n'est demandée.
+> **What data?** A random identifier stored in a session cookie, and your vote choice. No data that directly identifies you is requested.
 >
-> **Pourquoi ?** Pour qu'un seul vote soit compté par navigateur et pour afficher les résultats (intérêt légitime, art. 6.1.f RGPD).
+> **Why?** So that only one vote is counted per browser and to display the results (legitimate interest, GDPR art. 6.1.f).
 >
-> **Combien de temps ?** Le cookie est supprimé à la fermeture du navigateur. Les votes sont conservés jusqu'à la fin de la démonstration, puis supprimés.
+> **How long?** The cookie is deleted when the browser closes. Votes are kept until the end of the demonstration, then deleted.
 >
-> **Où ?** Sur Microsoft Azure, dans l'Union européenne (Espagne). Les pages chargent aussi des fichiers depuis Google et d'autres CDN, qui reçoivent votre adresse IP.
+> **Where?** On Microsoft Azure, in the European Union (Spain). The pages also load files from Google and other CDNs, which receive your IP address.
 >
-> **Vos droits :** accès, effacement, opposition, et réclamation auprès de la CNIL. Le vote étant pseudonyme, indiquez la valeur de votre cookie `voter_id` pour exercer vos droits.
+> **Your rights:** access, erasure, objection, and complaint to the CNIL. Since the vote is pseudonymous, give the value of your `voter_id` cookie to exercise your rights.
 
 ## Licences
 
-Toutes les dépendances sont sous licences permissives ou compatibles avec une utilisation en service, sans modification. Le détail est dans [docs/dependencies.md](../dependencies.md). Point d'attention : **Redis 8** est distribué sous triple licence (RSALv2, SSPLv1 ou AGPLv3). Son utilisation comme service interne, sans modification, est compatible. En revanche, revendre Redis lui-même comme service géré ne le serait pas sans précaution.
+All dependencies are under permissive licences or licences compatible with use as a service, unmodified. Details in [docs/dependencies.md](../dependencies.md). Point of attention: **Redis 8** is triple-licensed (RSALv2, SSPLv1 or AGPLv3). Using it as an internal service, unmodified, is compatible. Reselling Redis itself as a managed service would not be, without care.

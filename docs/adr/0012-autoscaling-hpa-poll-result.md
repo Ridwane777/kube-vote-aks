@@ -1,52 +1,52 @@
-# ADR-0012 : Autoscaling horizontal (HPA) de poll et result, de 2 à 4 pods
+# ADR-0012: Horizontal autoscaling (HPA) of poll and result, from 2 to 4 pods
 
-- **Statut :** Accepté, testé le 2026-10-28
-- **Date :** 2026-10-28
-- **Décideurs :** Ridwane, Harry
-- **Complète :** [ADR-0008](0008-mises-a-jour-sans-coupure-et-ressources.md), qui prévoyait un HPA « une fois la capacité mesurée » (voir [docs/performance](../performance/README.md))
+- **Status:** Accepted, tested on 2026-10-28
+- **Date:** 2026-10-28
+- **Deciders:** Ridwane777
+- **Complements:** [ADR-0008](0008-zero-downtime-updates-and-resources.md), which planned an HPA "once capacity is measured" (see [docs/performance](../performance/README.md))
 
-## Contexte
+## Context
 
-poll et result tournaient avec **2 réplicas fixes**. Le test de charge (100 utilisateurs virtuels) a mesuré au plus **109m de CPU par pod poll**, alors que sa request était de 50m. Les 2 nœuds `B2als_v2` restaient à 16 % de CPU : il y a de la place pour plus de pods, mais rien ne les créait automatiquement.
+poll and result ran with **2 fixed replicas**. The load test (100 virtual users) measured at most **109m of CPU per poll pod**, while its request was 50m. The 2 `B2als_v2` nodes stayed at 16 % CPU: there is room for more pods, but nothing created them automatically.
 
-Le HPA calcule l'utilisation **par rapport à la request CPU**. Une request trop basse le ferait monter dès la moindre charge. metrics-server est déjà installé par AKS.
+The HPA computes utilisation **relative to the CPU request**. A request that is too low would make it scale on the slightest load. metrics-server is already installed by AKS.
 
-## Options envisagées
+## Options considered
 
 | Option | ✅ | ❌ |
 |---|---|---|
-| **A. HPA min 2, max 4, cible 70 % CPU** | Garde la haute disponibilité (2 pods sur 2 nœuds, PDB `minAvailable: 1`) ; tient sur les 2 nœuds (≈ 0,8 cœur demandé au maximum sur ≈ 3,8) | Ne réagit qu'au CPU |
-| B. HPA min 1, max 2 | Moins de pods au repos | Un seul pod : plus de redondance, et le PDB `minAvailable: 1` **bloque le vidage des nœuds** (maintenance AKS) |
-| C. Garder 2 réplicas fixes | Rien à faire | Aucune réaction à la charge |
-| D. HPA + autoscaler de nœuds | Peut dépasser la taille des 2 nœuds | Quota de **6 vCPU** déjà presque atteint ; coût variable ; inutile à ce niveau de charge |
-| E. KEDA (mise à l'échelle sur la file Redis) | Pertinent pour le worker | Un composant de plus à installer ; le worker reste à 1 réplica ([ADR-0007](0007-worker-un-replica.md)) |
+| **A. HPA min 2, max 4, 70 % CPU target** | Keeps high availability (2 pods on 2 nodes, PDB `minAvailable: 1`); fits on the 2 nodes (≈ 0.8 core requested at most out of ≈ 3.8) | Reacts to CPU only |
+| B. HPA min 1, max 2 | Fewer pods at rest | A single pod: no redundancy, and the `minAvailable: 1` PDB **blocks node draining** (AKS maintenance) |
+| C. Keep 2 fixed replicas | Nothing to do | No reaction to load |
+| D. HPA + cluster autoscaler | Can grow beyond 2 nodes | **6 vCPU** quota almost reached; variable cost; useless at this load |
+| E. KEDA (scaling on the Redis queue) | Relevant for the worker | One more component to install; the worker stays at 1 replica ([ADR-0007](0007-single-worker-replica.md)) |
 
-## Décision
+## Decision
 
-**Option A**, dans `k8s/70-autoscaling.yaml` (`autoscaling/v2`) :
+**Option A**, in `k8s/70-autoscaling.yaml` (`autoscaling/v2`):
 
-- un HPA pour poll et un pour result : `minReplicas: 2`, `maxReplicas: 4`, `averageUtilization: 70` ;
-- **redescente stabilisée sur 120 s** (`behavior.scaleDown`), pour éviter de supprimer des pods (et de couper des connexions Socket.IO de result) à chaque creux de charge ;
-- **request CPU de poll : 50m → 100m**, proche de sa consommation mesurée, pour que 70 % corresponde à une vraie charge ;
-- **`replicas` retiré** des Deployments poll et result : sinon chaque `kubectl apply` remettrait le nombre de pods à 2, contre la décision du HPA ;
-- pas de HPA pour le worker (1 seul consommateur de la file, ADR-0007), ni pour Redis et PostgreSQL (avec état).
+- one HPA for poll and one for result: `minReplicas: 2`, `maxReplicas: 4`, `averageUtilization: 70`;
+- **scale-down stabilised over 120 s** (`behavior.scaleDown`), to avoid deleting pods (and dropping result's Socket.IO connections) at every dip in load;
+- **poll CPU request: 50m → 100m**, close to its measured usage, so that 70 % means real load;
+- **`replicas` removed** from the poll and result Deployments: otherwise every `kubectl apply` would reset the pod count to 2, against the HPA's decision;
+- no HPA for the worker (single queue consumer, ADR-0007), nor for Redis and PostgreSQL (stateful).
 
-## Conséquences
+## Consequences
 
-### ✅ Gagné
+### ✅ Gained
 
-- Mesuré le 2026-10-28 avec `scripts/load-test.js` : poll est passé de **2 à 3 pods** à 95 % de la request, puis revenu à 2 environ 2 minutes après la fin de la charge. result est resté à 2 (30 % au plus), comme prévu au vu de sa faible consommation.
-- La haute disponibilité et les PDB restent valables, puisque le minimum reste 2.
-- Aucun coût supplémentaire : on paie les nœuds, pas les pods.
+- Measured on 2026-10-28 with `scripts/load-test.js`: poll went from **2 to 3 pods** at 95 % of its request, then back to 2 about 2 minutes after the load ended. result stayed at 2 (30 % at most), as expected given its low usage.
+- High availability and PDBs still hold, since the minimum stays 2.
+- No extra cost: nodes are billed, not pods.
 
-### ❌ Perdu / risques
+### ❌ Lost / risks
 
-- **Migration d'un cluster existant** : retirer `replicas` d'un Deployment déjà créé par `kubectl apply` le ramène **une fois à 1 pod** avant que le HPA le remonte. On l'a évité en effaçant d'abord le champ de l'annotation `last-applied` (`kubectl apply set-last-applied`, voir le guide de déploiement). Un cluster neuf n'est pas concerné.
-- **Réaction en environ 1 minute** (collecte des métriques, toutes les 15 s, plus démarrage du pod) : un pic très bref passe avant que le pod en plus soit prêt.
-- **result et l'affinité `ClientIP`** : un nouveau pod ne reçoit que de nouveaux clients. À la redescente, les navigateurs branchés sur le pod supprimé se reconnectent (Socket.IO en polling). Un public derrière un même NAT reste sur un seul pod, quel que soit le nombre de pods.
-- Au 1ᵉʳ test, juste après le rallumage du cluster, **18 requêtes sur 14 343 ont échoué (0,12 %)**, avec un p95 de 535 ms. Refait 20 minutes plus tard : **0 erreur sur 16 836, p95 170 ms**, même montée à 3 pods. Les erreurs viennent probablement du cluster pas encore stabilisé, pas du HPA.
+- **Migrating an existing cluster**: removing `replicas` from a Deployment already created by `kubectl apply` drops it **once to 1 pod** before the HPA scales it back up. Avoided by first clearing the field from the `last-applied` annotation (`kubectl apply set-last-applied`, see the deployment guide). A fresh cluster is not affected.
+- **Reaction in about 1 minute** (metrics collected every 15 s, plus pod start): a very short spike passes before the extra pod is ready.
+- **result and `ClientIP` affinity**: a new pod only receives new clients. On scale-down, browsers attached to the removed pod reconnect (Socket.IO polling). An audience behind a single NAT stays on one pod, whatever the pod count.
+- On the 1st test, right after the cluster was restarted, **18 requests out of 14,343 failed (0.12 %)**, with a p95 of 535 ms. Rerun 20 minutes later: **0 errors out of 16,836, p95 170 ms**, same scale-up to 3 pods. The errors most likely came from the cluster not yet being settled, not from the HPA.
 
-### Quand changer
+### When to change
 
-- Charge dépassant 4 pods poll : remonter `maxReplicas`, puis ajouter un nœud si la mémoire des nœuds dépasse 80 %.
-- File Redis qui grossit : KEDA sur la longueur de la file, à condition de rendre le worker multi-réplica.
+- Load beyond 4 poll pods: raise `maxReplicas`, then add a node if node memory exceeds 80 %.
+- Growing Redis queue: KEDA on the queue length, provided the worker is made multi-replica.

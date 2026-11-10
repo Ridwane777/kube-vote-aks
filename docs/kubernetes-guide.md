@@ -1,126 +1,126 @@
-# Comprendre Kubernetes à travers le projet Bernstein
+# Understanding Kubernetes through Kube Vote AKS
 
-Ce guide explique, sans prérequis, les notions nécessaires pour comprendre et redéployer le projet : ce qu'est Kubernetes, chaque objet utilisé, à quoi il sert et comment les objets s'assemblent. Chaque notion est illustrée par l'application de vote du projet.
+This guide explains, with no prerequisites, the concepts needed to understand and redeploy the project: what Kubernetes is, each object used, what it is for and how the objects fit together. Each concept is illustrated with the project's voting application.
 
 ---
 
-## 1. Le problème que Kubernetes résout
+## 1. The problem Kubernetes solves
 
-Une application moderne est faite de plusieurs programmes. Dans ce projet :
+A modern application is made of several programs. In this project:
 
-| Programme | Langage | Rôle |
+| Program | Language | Role |
 |---|---|---|
-| **poll** | Python (Flask) | Page web où l'on vote |
-| **redis** | — | File d'attente : poll y dépose les votes |
-| **worker** | Java | Lit les votes dans Redis et les enregistre dans PostgreSQL |
-| **postgres** | — | Base de données qui conserve les votes |
-| **result** | Node.js | Page web qui affiche les résultats en temps réel |
+| **poll** | Python (Flask) | Web page where people vote |
+| **redis** | — | Queue: poll drops votes into it |
+| **worker** | Java | Reads votes from Redis and stores them in PostgreSQL |
+| **postgres** | — | Database that keeps the votes |
+| **result** | Node.js | Web page showing results in real time |
 
 ```
- Navigateur ──► poll ──► redis ──► worker ──► postgres ◄── result ◄── Navigateur
+ Browser ──► poll ──► redis ──► worker ──► postgres ◄── result ◄── Browser
 ```
 
-Chaque programme est emballé dans un **conteneur** (une image Docker) : le programme et tout ce dont il a besoin pour tourner.
+Each program is packaged in a **container** (a Docker image): the program and everything it needs to run.
 
-Lancer 5 conteneurs à la main sur un serveur avec `docker run` fonctionne, mais pose des questions :
+Starting 5 containers by hand on a server with `docker run` works, but raises questions:
 
-- Que se passe-t-il si un conteneur plante ? Il faut le relancer à la main.
-- Que se passe-t-il si le serveur tombe en panne ? Tout s'arrête.
-- Comment mettre à jour poll sans couper le site ?
-- Comment lancer 3 copies de poll quand il y a du monde, et répartir le trafic entre elles ?
-- Comment poll trouve-t-il l'adresse de Redis, qui change à chaque redémarrage ?
+- What if a container crashes? It must be restarted by hand.
+- What if the server fails? Everything stops.
+- How do you update poll without taking the site down?
+- How do you run 3 copies of poll under load and spread traffic between them?
+- How does poll find Redis's address, which changes on every restart?
 
-**Kubernetes** (abrégé **K8s**) est un **orchestrateur** : on lui décrit l'état voulu, par exemple « je veux 2 copies de poll, 1 Redis, 1 PostgreSQL avec un disque ». Il s'occupe en permanence de rendre la réalité conforme à cette description. Il redémarre ce qui plante, déplace les conteneurs quand une machine tombe et fait les mises à jour progressivement.
+**Kubernetes** (**K8s**) is an **orchestrator**: you describe the desired state, e.g. "I want 2 copies of poll, 1 Redis, 1 PostgreSQL with a disk". It continuously makes reality match that description. It restarts what crashes, moves containers when a machine fails and rolls out updates progressively.
 
-> **L'idée centrale :** on ne dit pas à Kubernetes *quoi faire* (« lance ce conteneur »), on lui dit *ce qu'on veut* (« il doit y avoir 2 poll »). C'est le modèle **déclaratif**. Une boucle de contrôle compare sans cesse l'état voulu à l'état réel et corrige les écarts.
+> **The core idea:** you don't tell Kubernetes *what to do* ("start this container"), you tell it *what you want* ("there must be 2 poll"). This is the **declarative** model. A control loop constantly compares desired state with actual state and fixes the gaps.
 
 ---
 
-## 2. L'architecture d'un cluster
+## 2. Cluster architecture
 
-Un **cluster** est un ensemble de machines gérées ensemble par Kubernetes.
+A **cluster** is a set of machines managed together by Kubernetes.
 
 ```
 ┌──────────────────────── Cluster ─────────────────────────┐
-│  Control plane (le cerveau)                              │
-│   ├─ API server   : la porte d'entrée (kubectl lui parle)│
-│   ├─ etcd         : la base qui stocke l'état voulu      │
-│   ├─ scheduler    : choisit sur quel nœud placer un pod  │
-│   └─ controllers  : boucles qui corrigent les écarts     │
+│  Control plane (the brain)                               │
+│   ├─ API server   : the front door (kubectl talks to it) │
+│   ├─ etcd         : the store holding the desired state  │
+│   ├─ scheduler    : picks the node for each pod          │
+│   └─ controllers  : loops that fix the gaps              │
 │                                                          │
-│  Nœud 1 (VM)                 Nœud 2 (VM)                 │
+│  Node 1 (VM)                 Node 2 (VM)                 │
 │   ├─ kubelet                  ├─ kubelet                 │
 │   ├─ containerd               ├─ containerd              │
 │   └─ pods…                    └─ pods…                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
-| Élément | Rôle |
+| Element | Role |
 |---|---|
-| **Control plane** | Prend les décisions. Sur AKS, Azure le gère pour nous (et gratuitement en tier Free) |
-| **Nœud** (*node*) | Une machine (ici une VM Azure `Standard_B2als_v2`) qui exécute les conteneurs. Le projet en a 2 |
-| **kubelet** | Agent sur chaque nœud : reçoit les ordres et lance les conteneurs |
-| **containerd** | Le moteur qui exécute réellement les conteneurs (l'équivalent de Docker) |
+| **Control plane** | Makes the decisions. On AKS, Azure runs it for us (for free on the Free tier) |
+| **Node** | A machine (here an Azure `Standard_B2als_v2` VM) that runs containers. The project has 2 |
+| **kubelet** | Agent on each node: receives orders and starts containers |
+| **containerd** | The engine that actually runs containers (the Docker equivalent) |
 
-**kubectl** est l'outil en ligne de commande qui parle à l'API server. Il sait à quel cluster s'adresser grâce au fichier `~/.kube/config` (le *kubeconfig*), rempli par `az aks get-credentials`.
+**kubectl** is the command-line tool that talks to the API server. It knows which cluster to address from the `~/.kube/config` file (the *kubeconfig*), filled in by `az aks get-credentials`.
 
 ---
 
-## 3. Les manifestes YAML
+## 3. YAML manifests
 
-Chaque objet Kubernetes se décrit dans un fichier **YAML**, appelé un *manifeste*. Ils ont tous la même structure :
+Each Kubernetes object is described in a **YAML** file called a *manifest*. They all share the same structure:
 
 ```yaml
-apiVersion: apps/v1        # version de l'API qui définit ce type d'objet
-kind: Deployment           # le type d'objet
-metadata:                  # identité de l'objet
+apiVersion: apps/v1        # API version that defines this object type
+kind: Deployment           # the object type
+metadata:                  # the object's identity
   name: poll
   namespace: bernstein
   labels:
     app: poll
-spec:                      # l'état voulu, propre à chaque type d'objet
+spec:                      # the desired state, specific to each object type
   ...
 ```
 
-### Rappels de syntaxe YAML
+### YAML syntax reminders
 
-- L'**indentation** (des espaces, jamais de tabulations) définit la hiérarchie.
-- `cle: valeur` est un dictionnaire.
-- `- element` est un élément de liste.
-- `---` sépare plusieurs objets dans le même fichier.
+- **Indentation** (spaces, never tabs) defines the hierarchy.
+- `key: value` is a dictionary.
+- `- item` is a list item.
+- `---` separates several objects in the same file.
 
 ```yaml
-env:                  # une liste…
-  - name: FOO         # …dont chaque élément est un dictionnaire
+env:                  # a list…
+  - name: FOO         # …whose items are dictionaries
     value: "bar"
 ```
 
-### Commandes de base
+### Basic commands
 
 ```sh
-kubectl apply -f fichier.yaml            # crée ou met à jour l'objet décrit
-kubectl apply -f k8s/                    # applique tous les fichiers du dossier
-kubectl get pods -n bernstein            # liste
-kubectl describe pod <nom> -n bernstein  # détail + événements (utile pour déboguer)
-kubectl logs <pod> -n bernstein          # sortie du programme
-kubectl delete -f fichier.yaml           # supprime
+kubectl apply -f file.yaml               # create or update the described object
+kubectl apply -f k8s/                    # apply every file in the directory
+kubectl get pods -n bernstein            # list
+kubectl describe pod <name> -n bernstein # details + events (useful for debugging)
+kubectl logs <pod> -n bernstein          # program output
+kubectl delete -f file.yaml              # delete
 ```
 
-Les fichiers YAML du dépôt sont **la source de vérité** : on modifie le fichier puis on fait `apply`, plutôt que de modifier le cluster à la main. Ainsi n'importe qui peut reconstruire le même état depuis le dépôt.
+The repository's YAML files are **the source of truth**: edit the file then `apply`, rather than changing the cluster by hand. That way anyone can rebuild the same state from the repository.
 
 ---
 
-## 4. Namespace : ranger et isoler
+## 4. Namespace: organise and isolate
 
-Un **namespace** est un dossier logique dans le cluster. Les noms y sont uniques : on peut avoir un `poll` dans `bernstein` et un autre dans `test`.
+A **namespace** is a logical folder in the cluster. Names are unique within it: you can have a `poll` in `bernstein` and another in `test`.
 
-| Namespace | Contenu |
+| Namespace | Content |
 |---|---|
-| `default` | Là où vont les objets quand on ne précise rien |
-| `kube-system` | Composants internes de Kubernetes (DNS, réseau, stockage…) |
-| `kube-public` | Lisible par tous, presque vide |
-| `kube-node-lease` | Signaux de vie des nœuds (*heartbeats*) |
-| **`bernstein`** | Toute notre application |
+| `default` | Where objects go when nothing is specified |
+| `kube-system` | Kubernetes internal components (DNS, network, storage…) |
+| `kube-public` | Readable by all, almost empty |
+| `kube-node-lease` | Node *heartbeats* |
+| **`bernstein`** | Our whole application |
 
 ```yaml
 apiVersion: v1
@@ -129,13 +129,13 @@ metadata:
   name: bernstein
 ```
 
-**Piège classique :** sans `-n bernstein`, kubectl regarde dans `default` et répond « No resources found ». Pour tout voir : `-A` (tous les namespaces).
+**Classic trap:** without `-n bernstein`, kubectl looks in `default` and answers "No resources found". To see everything: `-A` (all namespaces).
 
 ---
 
-## 5. Pod : la plus petite unité
+## 5. Pod: the smallest unit
 
-Un **pod** est un ou plusieurs conteneurs qui tournent **ensemble sur le même nœud** et partagent la même adresse IP et les mêmes volumes. Dans 99 % des cas, un pod = un conteneur.
+A **pod** is one or more containers running **together on the same node**, sharing the same IP address and volumes. In 99 % of cases, one pod = one container.
 
 ```yaml
 apiVersion: v1
@@ -155,38 +155,38 @@ spec:
           value: "bar"
 ```
 
-Ce qu'il faut retenir :
+Key points:
 
-- **Un pod est éphémère.** S'il meurt, il n'est pas réparé : un autre est créé, avec un **autre nom et une autre IP**.
-- On ne crée donc presque **jamais de pod à la main**. On crée un Deployment ou un StatefulSet qui crée et remplace les pods pour nous.
-- **Un nœud n'est pas un pod.** Le nœud est la machine, et un nœud héberge de nombreux pods.
+- **A pod is ephemeral.** If it dies, it is not repaired: another one is created, with **another name and another IP**.
+- So you almost **never create a pod by hand**. You create a Deployment or a StatefulSet that creates and replaces pods for you.
+- **A node is not a pod.** The node is the machine, and a node hosts many pods.
 
-Cycle de vie : `Pending` (en attente d'un nœud ou d'une image) → `ContainerCreating` → `Running`. En cas de problème : `CrashLoopBackOff` (le programme plante en boucle), `ImagePullBackOff` (image introuvable ou accès refusé).
+Life cycle: `Pending` (waiting for a node or an image) → `ContainerCreating` → `Running`. On trouble: `CrashLoopBackOff` (the program crashes in a loop), `ImagePullBackOff` (image not found or access denied).
 
 ---
 
-## 6. Labels et selectors : comment les objets se trouvent
+## 6. Labels and selectors: how objects find each other
 
-Les objets ne se référencent pas par nom ou par IP, mais par **étiquettes** (*labels*).
+Objects don't reference each other by name or IP, but by **labels**.
 
 ```yaml
 metadata:
   labels:
-    app: poll          # étiquette posée sur le pod
+    app: poll          # label set on the pod
 ```
 
 ```yaml
 selector:
-  app: poll            # « tous les pods qui ont app=poll »
+  app: poll            # "every pod with app=poll"
 ```
 
-C'est ce mécanisme qui relie un Service à ses pods et un Deployment à ses pods. Si le label et le selector ne correspondent pas exactement (même clé, même valeur), le lien ne se fait pas, sans aucun message d'erreur. Par exemple, un Service affiche alors `Endpoints: <none>`.
+This mechanism links a Service to its pods and a Deployment to its pods. If label and selector don't match exactly (same key, same value), the link silently fails. A Service then shows `Endpoints: <none>`.
 
 ---
 
-## 7. Service : une adresse fixe devant des pods qui changent
+## 7. Service: a fixed address in front of changing pods
 
-Les pods changent d'IP à chaque recréation. Un **Service** donne une **adresse stable et un nom DNS** à un groupe de pods sélectionnés par label, et répartit le trafic entre eux.
+Pods change IP every time they are recreated. A **Service** gives a **stable address and DNS name** to a group of pods selected by label, and spreads traffic between them.
 
 ```yaml
 apiVersion: v1
@@ -198,32 +198,32 @@ spec:
   selector:
     app: redis
   ports:
-    - port: 6379         # le port du Service (ce que les clients appellent)
-      targetPort: 6379   # le port du conteneur (où le trafic arrive)
+    - port: 6379         # the Service port (what clients call)
+      targetPort: 6379   # the container port (where traffic lands)
 ```
 
-Avec ce Service, poll se connecte simplement à l'hôte **`redis`**, port 6379. Le DNS interne du cluster traduit `redis` en IP du Service, quels que soient les pods derrière. Le nom complet est `redis.bernstein.svc.cluster.local`.
+With this Service, poll simply connects to host **`redis`**, port 6379. The cluster's internal DNS resolves `redis` to the Service IP, whatever pods are behind it. The full name is `redis.bernstein.svc.cluster.local`.
 
-**`port` ou `targetPort` ?** Le client appelle `service:port`, et le Service transmet à `pod:targetPort`. Ils sont souvent identiques, mais on pourrait exposer `port: 80` vers un conteneur qui écoute sur `8080`.
+**`port` or `targetPort`?** The client calls `service:port`, and the Service forwards to `pod:targetPort`. They are often the same, but you could expose `port: 80` to a container listening on `8080`.
 
-**Endpoints** : la liste des IP de pods actuellement derrière le Service. Elle se vérifie avec `kubectl describe svc <nom>`.
+**Endpoints**: the list of pod IPs currently behind the Service. Check it with `kubectl describe svc <name>`.
 
-### Les types de Service
+### Service types
 
-| Type | Accessible depuis | Usage dans le projet |
+| Type | Reachable from | Use in the project |
 |---|---|---|
-| `ClusterIP` (défaut) | L'intérieur du cluster uniquement | redis, et l'accès interne à poll et result |
-| *Headless* (`clusterIP: None`) | L'intérieur ; le DNS pointe directement sur chaque pod | postgres (StatefulSet) |
-| `NodePort` | Un port ouvert sur chaque nœud | Peu utilisé sur le cloud |
-| `LoadBalancer` | Internet : Azure crée un load balancer et une IP publique | Exposition de poll et result (ou d'un Ingress) |
+| `ClusterIP` (default) | Inside the cluster only | redis, and internal access to poll and result |
+| *Headless* (`clusterIP: None`) | Inside; DNS points directly at each pod | postgres (StatefulSet) |
+| `NodePort` | A port open on every node | Rarely used in the cloud |
+| `LoadBalancer` | The Internet: Azure creates a load balancer and a public IP | Exposing poll and result (or an Ingress) |
 
-**Affinité de session** (`sessionAffinity: ClientIP`) : envoie toujours le même client vers le même pod. Elle est nécessaire pour **result**, dont la bibliothèque Socket.IO est configurée en mode *polling* : une suite de requêtes HTTP qui doivent arriver au même pod quand il y a plusieurs réplicas.
+**Session affinity** (`sessionAffinity: ClientIP`): always sends the same client to the same pod. It is needed for **result**, whose Socket.IO library is configured in *polling* mode: a series of HTTP requests that must reach the same pod when there are several replicas.
 
 ---
 
-## 8. Deployment et ReplicaSet : faire tourner des applications sans état
+## 8. Deployment and ReplicaSet: running stateless applications
 
-Un **Deployment** dit : « je veux N copies de ce pod, avec cette image ». Il est utilisé pour **poll, result, worker et redis**.
+A **Deployment** says: "I want N copies of this pod, with this image". It is used for **poll, result, worker and redis**.
 
 ```yaml
 apiVersion: apps/v1
@@ -236,99 +236,101 @@ spec:
   selector:
     matchLabels:
       app: poll
-  template:                 # le modèle des pods à créer
+  template:                 # the template of the pods to create
     metadata:
       labels:
-        app: poll           # doit correspondre au selector
+        app: poll           # must match the selector
     spec:
       containers:
         - name: poll
           image: myregistry.azurecr.io/poll:v1
 ```
 
-En coulisse :
+(In the project's actual manifests, `replicas` is omitted for poll and result because an HPA owns the count, see [ADR-0012](adr/0012-autoscaling-hpa-poll-result.md).)
+
+Behind the scenes:
 
 ```
-Deployment ──crée──► ReplicaSet (une par version du template) ──crée──► Pods
+Deployment ──creates──► ReplicaSet (one per template version) ──creates──► Pods
 ```
 
-- Le **ReplicaSet** maintient le nombre de pods. Si un pod est supprimé, il en recrée un.
-- Chaque modification du `template`, par exemple une nouvelle image, crée un **nouveau ReplicaSet**. Les noms des pods contiennent un hash du template (`poll-7d9f8c6b5-x2kq4`).
+- The **ReplicaSet** keeps the pod count. If a pod is deleted, it creates a new one.
+- Each change to the `template`, e.g. a new image, creates a **new ReplicaSet**. Pod names contain a hash of the template (`poll-7d9f8c6b5-x2kq4`).
 
-### Mise à jour progressive (*rolling update*)
+### Rolling update
 
-En changeant `poll:v1` en `poll:v2`, le Deployment monte le nouveau ReplicaSet et descend l'ancien **petit à petit**. Il reste toujours des pods en service : **zéro interruption**.
+When `poll:v1` changes to `poll:v2`, the Deployment scales the new ReplicaSet up and the old one down **gradually**. There are always pods serving: **zero interruption**.
 
 ```yaml
 spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1          # au plus 1 pod en plus pendant la mise à jour
-      maxUnavailable: 0    # jamais moins de pods prêts que demandé
+      maxSurge: 1          # at most 1 extra pod during the update
+      maxUnavailable: 0    # never fewer ready pods than requested
 ```
 
 ```sh
-kubectl rollout status deploy/poll -n bernstein   # suivre la mise à jour
-kubectl rollout history deploy/poll -n bernstein  # versions précédentes
-kubectl rollout undo deploy/poll -n bernstein     # revenir en arrière
+kubectl rollout status deploy/poll -n bernstein   # follow the update
+kubectl rollout history deploy/poll -n bernstein  # previous versions
+kubectl rollout undo deploy/poll -n bernstein     # roll back
 ```
 
-**Pourquoi jamais `latest`** : si l'image s'appelle toujours `poll:latest`, le template ne change pas, donc Kubernetes ne fait aucune mise à jour. Avec des tags versionnés (`v1`, `v2`), chaque changement est visible, traçable et réversible.
+**Why never `latest`**: if the image is always `poll:latest`, the template doesn't change, so Kubernetes performs no update. With versioned tags (`v1`, `v2`), every change is visible, traceable and reversible.
 
 ---
 
-## 9. Sondes (*probes*) : savoir si un pod est vraiment prêt
+## 9. Probes: knowing whether a pod is really ready
 
-Un conteneur « Running » n'est pas forcément capable de répondre. Les sondes interrogent l'application :
+A "Running" container is not necessarily able to answer. Probes query the application:
 
-| Sonde | Question | Si échec |
+| Probe | Question | On failure |
 |---|---|---|
-| `readinessProbe` | « Peux-tu recevoir du trafic ? » | Le pod est **retiré du Service** (mais pas tué) |
-| `livenessProbe` | « Es-tu encore vivant ? » | Le conteneur est **redémarré** |
-| `startupProbe` | « As-tu fini de démarrer ? » | Laisse du temps aux démarrages lents (Java) |
+| `readinessProbe` | "Can you take traffic?" | The pod is **removed from the Service** (not killed) |
+| `livenessProbe` | "Are you still alive?" | The container is **restarted** |
+| `startupProbe` | "Have you finished starting?" | Gives slow starters (Java) time |
 
 ```yaml
 readinessProbe:
   httpGet:
-    path: /readyz        # poll répond OK seulement s'il joint Redis
+    path: /readyz        # poll answers OK only if it reaches Redis
     port: 80
   periodSeconds: 5
 ```
 
-Sans `readinessProbe`, un rolling update enverrait du trafic à des pods pas encore prêts, et le site renverrait des erreurs pendant la mise à jour. Les sondes sont **indispensables pour le zéro downtime**.
+Without a `readinessProbe`, a rolling update would send traffic to pods not yet ready, and the site would return errors during the update. Probes are **essential for zero downtime**.
 
 ---
 
-## 10. Volumes, PV, PVC : garder des données
+## 10. Volumes, PV, PVC: keeping data
 
-Le système de fichiers d'un conteneur est **effacé** quand il est recréé. Pour PostgreSQL, il faut un stockage qui survit.
+A container's filesystem is **wiped** when it is recreated. PostgreSQL needs storage that survives.
 
-| Objet | Analogie | Rôle |
+| Object | Analogy | Role |
 |---|---|---|
-| **PersistentVolume (PV)** | Un disque | Une ressource de stockage réelle (disque Azure, dossier du nœud…) |
-| **PersistentVolumeClaim (PVC)** | Un bon de commande | « Il me faut 1 Gi en lecture/écriture ». Kubernetes l'associe (*bind*) à un PV |
-| **StorageClass** | Le fournisseur | Crée automatiquement le PV quand un PVC le demande (*provisionnement dynamique*) |
+| **PersistentVolume (PV)** | A disk | A real storage resource (Azure disk, node directory…) |
+| **PersistentVolumeClaim (PVC)** | A purchase order | "I need 1 Gi read/write". Kubernetes *binds* it to a PV |
+| **StorageClass** | The supplier | Creates the PV automatically when a PVC asks for it (*dynamic provisioning*) |
 
-- Au **bootstrap** (Minikube), le PV a été créé **à la main** (`hostPath`, `storageClassName: manual`).
-- Sur **AKS**, la StorageClass `default` crée **un vrai disque Azure** automatiquement. On n'écrit que le PVC.
+- During the **bootstrap** (Minikube), the PV was created **by hand** (`hostPath`, `storageClassName: manual`).
+- On **AKS**, the `default` StorageClass creates **a real Azure disk** automatically. Only the PVC is written.
 
-**Modes d'accès** : `ReadWriteOnce` (RWO) = monté par **un seul nœud** à la fois. C'est le cas des disques Azure, et c'est suffisant pour une base de données à une instance.
+**Access modes**: `ReadWriteOnce` (RWO) = mounted by **a single node** at a time. That is the case for Azure disks, and enough for a single-instance database.
 
-**Politique de récupération** (*reclaim policy*) : `Delete` (le disque est supprimé avec le PVC, défaut sur AKS) ou `Retain` (le disque est conservé).
+**Reclaim policy**: `Delete` (the disk is deleted with the PVC, AKS default) or `Retain` (the disk is kept).
 
 ---
 
-## 11. StatefulSet : faire tourner une base de données
+## 11. StatefulSet: running a database
 
-Un **StatefulSet** ressemble à un Deployment, mais pour les applications **avec état** :
+A **StatefulSet** looks like a Deployment, but for **stateful** applications:
 
 | | Deployment | StatefulSet |
 |---|---|---|
-| Nom des pods | Aléatoire (`poll-7d9f…-x2k`) | **Stable** et numéroté (`postgres-0`) |
-| Stockage | PVC commun, créé à part | **Un PVC par pod**, créé automatiquement |
-| Recréation d'un pod | Nouveau nom, aucun disque attaché | **Même nom, même disque** |
-| Service | ClusterIP normal | Service *headless* obligatoire (`serviceName`) |
+| Pod names | Random (`poll-7d9f…-x2k`) | **Stable** and numbered (`postgres-0`) |
+| Storage | Shared PVC, created separately | **One PVC per pod**, created automatically |
+| Pod recreation | New name, no disk attached | **Same name, same disk** |
+| Service | Normal ClusterIP | *Headless* Service required (`serviceName`) |
 
 ```yaml
 apiVersion: apps/v1
@@ -353,7 +355,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql
-  volumeClaimTemplates:        # un PVC sera créé par pod : data-postgres-0
+  volumeClaimTemplates:        # one PVC per pod: data-postgres-0
     - metadata:
         name: data
       spec:
@@ -363,15 +365,15 @@ spec:
             storage: 1Gi
 ```
 
-Si `postgres-0` est supprimé, il revient sous le même nom et se rattache au PVC `data-postgres-0` : **les votes sont conservés**. Le choix et ses limites sont détaillés dans l'[ADR-0003](adr/0003-manifestes-yaml-postgres-statefulset.md).
+If `postgres-0` is deleted, it comes back with the same name and reattaches the `data-postgres-0` PVC: **votes are kept**. The choice and its limits are detailed in [ADR-0003](adr/0003-yaml-manifests-postgres-statefulset.md).
 
 ---
 
-## 12. ConfigMap et Secret : la configuration hors de l'image
+## 12. ConfigMap and Secret: configuration outside the image
 
-On ne reconstruit pas une image pour changer un paramètre. La configuration est injectée au démarrage.
+You don't rebuild an image to change a setting. Configuration is injected at start-up.
 
-### ConfigMap : configuration non sensible
+### ConfigMap: non-sensitive configuration
 
 ```yaml
 apiVersion: v1
@@ -384,9 +386,9 @@ data:
     CREATE TABLE IF NOT EXISTS votes (...);
 ```
 
-Un ConfigMap se consomme comme **variables d'environnement** ou comme **fichiers montés** dans le conteneur. Dans le projet, `schema.sql` est monté dans `/docker-entrypoint-initdb.d/`. L'image `postgres` exécute les fichiers de ce dossier **au premier démarrage, sur un disque vide uniquement**.
+A ConfigMap is consumed as **environment variables** or as **files mounted** in the container. In the project, `schema.sql` is mounted in `/docker-entrypoint-initdb.d/`. The `postgres` image runs the files in that directory **on first start, on an empty disk only**.
 
-### Secret : données sensibles
+### Secret: sensitive data
 
 ```sh
 kubectl create secret generic postgres-secret -n bernstein \
@@ -402,57 +404,57 @@ env:
         key: POSTGRES_PASSWORD
 ```
 
-Ce qu'il faut comprendre :
+What to understand:
 
-- Dans un Secret, les valeurs sont en **base64**. Ce n'est **pas** du chiffrement : `base64 -d` suffit à les lire. Un fichier Secret YAML commité équivaut donc à un mot de passe en clair dans git.
-- C'est pourquoi le Secret est créé **par commande**, hors du dépôt. Le sujet interdit de commiter le mot de passe mais exige de **documenter** comment le créer.
-- `kubectl describe secret` affiche la taille des valeurs, pas leur contenu.
-- L'accès aux Secrets se restreint avec les droits RBAC du cluster.
-
----
-
-## 13. Registre d'images : ACR
-
-Les nœuds doivent télécharger (*pull*) les images poll, worker et result. Elles sont stockées dans un **registre privé** : **ACR** (*Azure Container Registry*), `myregistry.azurecr.io`.
-
-```
-Machine locale ──docker build──► image ──docker push──► ACR ──pull──► Nœuds AKS
-```
-
-Le cluster a été relié au registre avec `--attach-acr` : les nœuds s'authentifient avec leur **identité managée** Azure, sans mot de passe ni Secret de registre dans Kubernetes.
-
-**ACR ne stocke que des images**, pas les données ni les disques. Les disques des PVC sont des *Managed Disks* Azure, dans le resource group technique `MC_bernstein-spain-rg_bernstein-aks-2_spaincentral`.
+- In a Secret, values are **base64**. That is **not** encryption: `base64 -d` is enough to read them. A committed Secret YAML file is a clear-text password in git.
+- That is why the Secret is created **by command**, outside the repository. Requirement: never commit the password, but **document** how to create it.
+- `kubectl describe secret` shows the size of the values, not their content.
+- Access to Secrets is restricted with the cluster's RBAC rights.
 
 ---
 
-## 14. AKS : Kubernetes géré par Azure
+## 13. Image registry: ACR
 
-**AKS** (*Azure Kubernetes Service*) fournit un cluster dont Azure gère le control plane. Nous ne gérons que les nœuds et ce qu'on y déploie.
+Nodes must *pull* the poll, worker and result images. They are stored in a **private registry**: **ACR** (*Azure Container Registry*), `myregistry.azurecr.io`.
 
-| Commande | Effet |
+```
+Local machine ──docker build──► image ──docker push──► ACR ──pull──► AKS nodes
+```
+
+The cluster is attached to the registry with `--attach-acr`: nodes authenticate with their Azure **managed identity**, with no password or registry Secret in Kubernetes.
+
+**ACR only stores images**, not data or disks. PVC disks are Azure *Managed Disks*, in the technical resource group `MC_bernstein-spain-rg_bernstein-aks-2_spaincentral`.
+
+---
+
+## 14. AKS: Kubernetes managed by Azure
+
+**AKS** (*Azure Kubernetes Service*) provides a cluster whose control plane is run by Azure. We only manage the nodes and what we deploy on them.
+
+| Command | Effect |
 |---|---|
-| `az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2` | Ajoute le cluster au kubeconfig local |
-| `az aks stop -g bernstein-spain-rg -n bernstein-aks-2` | Éteint les nœuds (ne paie plus les VM) |
-| `az aks start -g bernstein-spain-rg -n bernstein-aks-2` | Les rallume (les objets et les disques sont conservés) |
+| `az aks get-credentials -g bernstein-spain-rg -n bernstein-aks-2` | Adds the cluster to the local kubeconfig |
+| `az aks stop -g bernstein-spain-rg -n bernstein-aks-2` | Powers the nodes off (VMs no longer billed) |
+| `az aks start -g bernstein-spain-rg -n bernstein-aks-2` | Powers them on again (objects and disks are kept) |
 
-Les choix de plateforme et de région sont dans l'[ADR-0001](adr/0001-plateforme-aks-acr.md) et l'[ADR-0002](adr/0002-region-spain-central.md).
+Platform and region choices are in [ADR-0001](adr/0001-platform-aks-acr.md) and [ADR-0002](adr/0002-region-spain-central.md).
 
 ---
 
-## 15. Exposer l'application sur Internet
+## 15. Exposing the application to the Internet
 
-Les Services `ClusterIP` ne sont joignables que depuis l'intérieur du cluster. Pour qu'un navigateur atteigne poll et result :
+`ClusterIP` Services are only reachable from inside the cluster. For a browser to reach poll and result:
 
-| Méthode | Principe | Coût et complexité |
+| Method | Principle | Cost and complexity |
 |---|---|---|
-| Service `LoadBalancer` | Azure crée une IP publique par Service | Simple. Une IP par application |
-| **Ingress** + contrôleur (ex. ingress-nginx) | Une seule IP publique ; un routage par nom d'hôte ou par chemin vers les Services | Un composant de plus. Une seule IP, TLS centralisé |
+| `LoadBalancer` Service | Azure creates one public IP per Service | Simple. One IP per application |
+| **Ingress** + controller (e.g. ingress-nginx) | A single public IP; routing by host name or path to the Services | One more component. Single IP, centralised TLS |
 
-Le choix fera l'objet d'un ADR dédié.
+The project uses `LoadBalancer` Services, see [ADR-0004](adr/0004-loadbalancer-exposure.md).
 
 ---
 
-## 16. Vue d'ensemble du projet
+## 16. Project overview
 
 ```
                        Internet
@@ -460,7 +462,7 @@ Le choix fera l'objet d'un ADR dédié.
                  (LoadBalancer / Ingress)
                  ┌────────┴────────┐
                  ▼                 ▼
-          Service poll       Service result (affinité de session)
+          Service poll       Service result (session affinity)
           Deployment ×2      Deployment ×2
                  │                 ▲
                  ▼                 │
@@ -472,66 +474,68 @@ Le choix fera l'objet d'un ADR dédié.
                  │                 │
                  ▼                 │
           Service postgres (headless)
-          StatefulSet ×1 + PVC (disque Azure)
+          StatefulSet ×1 + PVC (Azure disk)
                  ▲
      Secret postgres-secret   ConfigMap schema.sql
 
-Tout est dans le namespace « bernstein ». Les images viennent de l'ACR.
+Everything is in the "bernstein" namespace. Images come from the ACR.
 ```
 
-### Ordre de déploiement
+### Deployment order
 
-| Fichier | Contenu |
+| File | Content |
 |---|---|
-| — | `kubectl create secret …` (hors du dépôt) |
-| `k8s/00-namespace.yaml` | Namespace `bernstein` |
-| `k8s/05-postgres-init.yaml` | ConfigMap `schema.sql` (table `votes`) |
-| `k8s/10-postgres.yaml` | Service headless + StatefulSet PostgreSQL |
-| `k8s/20-redis.yaml` | Service ClusterIP + Deployment Redis |
-| `k8s/30-poll.yaml` | Service `LoadBalancer` + Deployment poll (×2) |
-| `k8s/40-worker.yaml` | Deployment worker (×1, pas de Service) |
-| `k8s/50-result.yaml` | Service `LoadBalancer` (affinité `ClientIP`) + Deployment result (×2) |
-| `k8s/60-disruption-budgets.yaml` | PodDisruptionBudgets : au moins 1 pod poll et 1 pod result pendant un drain de nœud |
+| — | `kubectl create secret …` (outside the repository) |
+| `k8s/00-namespace.yaml` | `bernstein` namespace |
+| `k8s/05-postgres-init.yaml` | `schema.sql` ConfigMap (`votes` table) |
+| `k8s/10-postgres.yaml` | Headless Service + PostgreSQL StatefulSet |
+| `k8s/20-redis.yaml` | ClusterIP Service + Redis Deployment |
+| `k8s/30-poll.yaml` | `LoadBalancer` Service + poll Deployment |
+| `k8s/40-worker.yaml` | worker Deployment (×1, no Service) |
+| `k8s/50-result.yaml` | `LoadBalancer` Service (`ClientIP` affinity) + result Deployment |
+| `k8s/60-disruption-budgets.yaml` | PodDisruptionBudgets: at least 1 poll pod and 1 result pod during a node drain |
+| `k8s/70-autoscaling.yaml` | HorizontalPodAutoscalers: poll and result between 2 and 4 pods |
 
 ---
 
-## 17. Déboguer : la démarche
+## 17. Debugging: the approach
 
-1. `kubectl get pods -n bernstein` : quel pod n'est pas `Running` ou `READY 1/1` ?
-2. `kubectl describe pod <pod> -n bernstein` : lire les **Events** en bas (image introuvable, volume non attaché, sonde en échec…).
-3. `kubectl logs <pod> -n bernstein` (ajouter `--previous` après un crash) : l'erreur du programme lui-même.
-4. `kubectl describe svc <svc> -n bernstein` : des `Endpoints` vides indiquent un label et un selector qui ne correspondent pas, ou des pods pas prêts.
-5. `kubectl get events -n bernstein --sort-by=.lastTimestamp` : la chronologie.
+1. `kubectl get pods -n bernstein`: which pod is not `Running` or `READY 1/1`?
+2. `kubectl describe pod <pod> -n bernstein`: read the **Events** at the bottom (image not found, volume not attached, failing probe…).
+3. `kubectl logs <pod> -n bernstein` (add `--previous` after a crash): the program's own error.
+4. `kubectl describe svc <svc> -n bernstein`: empty `Endpoints` means a label/selector mismatch, or pods not ready.
+5. `kubectl get events -n bernstein --sort-by=.lastTimestamp`: the timeline.
 
-| Symptôme | Cause probable |
+| Symptom | Likely cause |
 |---|---|
-| `ImagePullBackOff` | Nom ou tag d'image faux, ACR non relié |
-| `CrashLoopBackOff` | Le programme plante : lire les logs (variable manquante, base injoignable) |
-| `Pending` | Pas assez de CPU ou de mémoire sur les nœuds, ou PVC non lié |
-| `CreateContainerConfigError` | Secret ou ConfigMap référencé inexistant |
-| Service sans Endpoints | Label et selector différents, ou readinessProbe en échec |
+| `ImagePullBackOff` | Wrong image name or tag, ACR not attached |
+| `CrashLoopBackOff` | The program crashes: read the logs (missing variable, database unreachable) |
+| `Pending` | Not enough CPU or memory on the nodes, or PVC not bound |
+| `CreateContainerConfigError` | Referenced Secret or ConfigMap does not exist |
+| Service without Endpoints | Label and selector differ, or readinessProbe failing |
 
 ---
 
-## 18. Glossaire
+## 18. Glossary
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| Cluster | Ensemble de nœuds gérés par un control plane |
-| Nœud | Machine qui exécute des pods |
-| Pod | Un ou plusieurs conteneurs avec la même IP ; éphémère |
-| Namespace | Espace de noms qui range et isole les objets |
-| Label / selector | Étiquettes et filtres qui relient les objets entre eux |
-| Service | Adresse et nom DNS stables devant un groupe de pods |
-| Deployment | Maintient N pods identiques sans état ; mises à jour progressives |
-| ReplicaSet | Garde le bon nombre de pods pour une version du template |
-| StatefulSet | Comme un Deployment, avec une identité et un disque stables par pod |
-| PV / PVC / StorageClass | Le disque / la demande de disque / le fournisseur de disques |
-| ConfigMap | Configuration non sensible injectée dans les pods |
-| Secret | Donnée sensible (encodée en base64, pas chiffrée) |
-| Probe | Test de santé : prêt (readiness), vivant (liveness), démarré (startup) |
-| Rolling update | Remplacement progressif des pods, sans interruption |
-| Ingress | Routage HTTP depuis Internet vers les Services |
-| kubectl | Outil en ligne de commande pour piloter le cluster |
-| kubeconfig | Fichier `~/.kube/config` : à quel cluster parler, avec quels identifiants |
-| AKS / ACR | Kubernetes géré par Azure / registre d'images privé Azure |
+| Cluster | Set of nodes managed by a control plane |
+| Node | Machine that runs pods |
+| Pod | One or more containers sharing an IP; ephemeral |
+| Namespace | Name space that organises and isolates objects |
+| Label / selector | Tags and filters that link objects together |
+| Service | Stable address and DNS name in front of a group of pods |
+| Deployment | Keeps N identical stateless pods; progressive updates |
+| ReplicaSet | Keeps the right pod count for one template version |
+| StatefulSet | Like a Deployment, with a stable identity and disk per pod |
+| PV / PVC / StorageClass | The disk / the disk request / the disk supplier |
+| ConfigMap | Non-sensitive configuration injected into pods |
+| Secret | Sensitive data (base64-encoded, not encrypted) |
+| Probe | Health check: ready (readiness), alive (liveness), started (startup) |
+| Rolling update | Progressive pod replacement, without interruption |
+| HPA | HorizontalPodAutoscaler: adjusts the pod count to load |
+| Ingress | HTTP routing from the Internet to Services |
+| kubectl | Command-line tool to drive the cluster |
+| kubeconfig | `~/.kube/config` file: which cluster to talk to, with which credentials |
+| AKS / ACR | Kubernetes managed by Azure / Azure private image registry |

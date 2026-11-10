@@ -1,66 +1,66 @@
 # Business plan
 
-Le projet Bernstein est un projet pédagogique. Ce document examine ce que deviendrait le travail réalisé s'il était proposé comme un service. Les chiffres de coûts viennent de [docs/costs](../costs/README.md) et ceux de capacité de [docs/performance](../performance/README.md). Les hypothèses de marché ne sont pas vérifiées et sont marquées comme telles.
+Kube Vote AKS is a portfolio project. This document looks at what the work would become if it were offered as a service. Cost figures come from [docs/costs](../costs/README.md) and capacity figures from [docs/performance](../performance/README.md). Market assumptions are not verified and are marked as such.
 
-## Problème
+## Problem
 
-Un organisateur d'événement (conférence, cours, réunion d'entreprise, association) veut **sonder son public en direct** et afficher les résultats à l'écran en temps réel. Les outils existants sont des services hébergés par des tiers, souvent hors de l'Union européenne, avec des formules payantes par organisateur.
+An event organiser (conference, class, company meeting, association) wants to **poll the audience live** and show results on screen in real time. Existing tools are third-party hosted services, often outside the European Union, with paid plans per organiser.
 
 ## Solution
 
-Une application de vote en direct (pages de vote et de résultats en temps réel), **déployable en une commande** sur le cluster Kubernetes du client ou sur un cluster géré par nous :
+A live voting application (voting page and real-time results page), **deployable in one command** on the customer's Kubernetes cluster or on a cluster we run:
 
-- mises à jour progressives, mesurées : 0 à 1 requête en échec par déploiement avec le code d'origine ([docs/performance](../performance/README.md)) ;
-- hébergement dans l'UE (Espagne) ;
-- aucun compte demandé aux votants, seul un identifiant pseudonyme est utilisé.
+- progressive, measured updates: 0 to 1 failed request per deployment with the upstream code ([docs/performance](../performance/README.md));
+- hosting in the EU (Spain);
+- no account required from voters, only a pseudonymous identifier.
 
-## Marché et clients cibles (hypothèses)
+## Market and target customers (assumptions)
 
-| Segment | Besoin | Sensibilité |
+| Segment | Need | Sensitivity |
 |---|---|---|
-| Écoles et universités | Sondages en cours | Prix, données des étudiants (RGPD) |
-| Entreprises (réunions internes) | Hébergement dans l'UE, voire sur leur propre infrastructure | Souveraineté des données |
-| Associations et collectivités | Consultations simples | Prix |
+| Schools and universities | In-class polls | Price, learner data (GDPR) |
+| Companies (internal meetings) | EU hosting, or on their own infrastructure | Data sovereignty |
+| Associations and local authorities | Simple consultations | Price |
 
-## Concurrence
+## Competition
 
-| Concurrent | Forces | Notre différence |
+| Competitor | Strengths | Our difference |
 |---|---|---|
-| Slido, Mentimeter, Wooclap, Kahoot | Produits complets (quiz, nuages de mots, intégrations PowerPoint et Teams), notoriété | Déploiement sur l'infrastructure du client ou dans l'UE, code source maîtrisé, coût d'infrastructure connu |
-| Formulaires (Google Forms, Microsoft Forms) | Gratuits, connus | Résultats en direct à l'écran |
+| Slido, Mentimeter, Wooclap, Kahoot | Full products (quizzes, word clouds, PowerPoint and Teams integrations), brand awareness | Deployment on the customer's infrastructure or in the EU, source code under control, known infrastructure cost |
+| Forms (Google Forms, Microsoft Forms) | Free, familiar | Live results on screen |
 
-Notre produit est beaucoup moins riche fonctionnellement : 4 choix fixes, une seule question.
+Our product is far poorer in features: 4 fixed choices, a single question.
 
-## Modèle économique (hypothèse)
+## Business model (assumption)
 
-| Offre | Contenu | Prix indicatif |
+| Offer | Content | Indicative price |
 |---|---|---|
-| Auto-hébergée | Manifestes, scripts, documentation, support par e-mail | Licence annuelle par organisation |
-| Gérée par événement | Cluster dédié le temps de l'événement | Forfait par événement |
-| Gérée à l'année | Cluster partagé, plusieurs sondages | Abonnement mensuel |
+| Self-hosted | Manifests, scripts, documentation, e-mail support | Annual licence per organisation |
+| Managed per event | Dedicated cluster for the event | Flat fee per event |
+| Managed yearly | Shared cluster, several polls | Monthly subscription |
 
-### Coût unitaire (mesuré et estimé)
+### Unit cost (measured and estimated)
 
-| Élément | Valeur | Source |
+| Item | Value | Source |
 |---|---|---|
-| Coût du cluster allumé | ≈ 4,3 €/jour | Estimé, prix Azure publics |
-| Capacité démontrée | 100 utilisateurs simultanés, ≈ 28 votes/s, 0 erreur, p95 208 ms, cluster à 16 % de CPU au plus | Mesuré (k6) |
-| Événement d'une journée (cluster allumé 24 h, arrêté le reste du temps) | ≈ 4,3 € d'infrastructure, plus ≈ 1 €/jour de coûts fixes (IP, ACR) | Estimé |
+| Running cluster cost | ≈ 4.3 €/day | Estimated, public Azure prices |
+| Demonstrated capacity | 100 concurrent users, ≈ 28 votes/s, 0 errors, p95 208 ms, cluster at 16 % CPU at most | Measured (k6) |
+| One-day event (cluster on 24 h, stopped otherwise) | ≈ 4.3 € of infrastructure, plus ≈ 1 €/day of fixed costs (IPs, ACR) | Estimated |
 
-La capacité maximale n'est pas connue : le test de charge n'a pas atteint la limite du cluster. À 100 votants, le coût d'infrastructure est d'environ **4 centimes par votant et par jour**, et il baisse à mesure que le public grandit, puisque le cluster n'est pas saturé.
+Maximum capacity is unknown: the load test did not reach the cluster's limit. At 100 voters, infrastructure costs about **4 cents per voter per day**, and it falls as the audience grows, since the cluster is not saturated.
 
 ## SWOT
 
-| | Positif | Négatif |
+| | Positive | Negative |
 |---|---|---|
-| **Interne** | **Forces** : déploiement reproductible en une commande ; mises à jour progressives et rollback mesurés ; hébergement UE ; coûts connus et maîtrisés | **Faiblesses** : fonctionnalités minimales ; zéro erreur non garanti pendant les mises à jour de result (code imposé) ; pas de HTTPS ; pas de sauvegarde ; bibliothèques front obsolètes ([docs/legal](../legal/README.md)) ; une seule personne sait l'exploiter |
-| **Externe** | **Opportunités** : demande de souveraineté des données (RGPD, secteur public) ; organisations déjà équipées de Kubernetes | **Menaces** : concurrents établis et gratuits pour un petit usage ; dépendance à Azure et à ses quotas ; évolution des licences (Redis) |
+| **Internal** | **Strengths**: reproducible one-command deployment; measured progressive updates and rollback; EU hosting; known, controlled costs | **Weaknesses**: minimal features; zero errors not guaranteed during result updates (upstream code kept unmodified); no HTTPS; no backups; outdated front-end libraries ([docs/legal](../legal/README.md)); a single person knows how to operate it |
+| **External** | **Opportunities**: demand for data sovereignty (GDPR, public sector); organisations already running Kubernetes | **Threats**: established competitors, free for small use; dependency on Azure and its quotas; licence changes (Redis) |
 
-## Feuille de route
+## Roadmap
 
-| Étape | Contenu | Prérequis technique |
+| Step | Content | Technical prerequisite |
 |---|---|---|
-| 1. Fiabiliser | HTTPS, sauvegardes, supervision, tags fixés | [Rétrospective](../retrospective/README.md), actions 3 à 6 |
-| 2. Produit minimal vendable | Questions et choix configurables (`OPTION_A` à `OPTION_D` existent déjà), plusieurs sondages | Modifications de poll et result |
-| 3. Industrialiser | CI/CD, Kustomize, un namespace par client | ADR à écrire |
-| 4. Passer à l'échelle | Autoscaling (HPA, puis autoscaler de nœuds), mesure de la capacité maximale | Test de charge jusqu'à la saturation |
+| 1. Harden | HTTPS, backups, monitoring, pinned tags | [Retrospective](../retrospective/README.md), actions 3 to 6 |
+| 2. Minimum sellable product | Configurable questions and choices (`OPTION_A` to `OPTION_D` already exist), several polls | Changes to poll and result |
+| 3. Industrialise | CI/CD, Kustomize, one namespace per customer | ADR to write |
+| 4. Scale | Autoscaling (HPA, then node autoscaler), measuring maximum capacity | Load test up to saturation |
