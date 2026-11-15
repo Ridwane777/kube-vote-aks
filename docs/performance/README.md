@@ -32,7 +32,7 @@ Harder scenario, used to stress the fixes: 2 back-to-back result rollouts (`kube
 | 2 | 1 poll failure during a rolling update | The old pod stops before the Load Balancer and kube-proxy have removed it from their lists | 10 s `preStop`: the pod keeps answering during propagation |
 | 3 | result failures during rollouts, once a ~3 min outage (58 out of 61) | Hypothesis: `ClientIP` affinity + `externalTrafficPolicy: Local`, needed by Socket.IO's polling transport | Switch to WebSocket transport, affinity removed ([ADR-0005](../adr/0005-result-websocket-without-affinity.md)) |
 | 4 | Still 2 failures out of 88 during 2 back-to-back rollouts | Node.js exited abruptly on `SIGTERM` | Graceful shutdown in `server.js`: finish in-flight requests, close WebSockets and PostgreSQL |
-| — | Both replicas of an application sometimes on the same node | The scheduler does not guarantee spreading | `topologySpreadConstraints` (soft, `ScheduleAnyway`) |
+| - | Both replicas of an application sometimes on the same node | The scheduler does not guarantee spreading | `topologySpreadConstraints` (soft, `ScheduleAnyway`) |
 
 Fixes 3 and 4 were later reverted to keep the upstream code unmodified ([ADR-0009](../adr/0009-upstream-components-unmodified.md)).
 
@@ -43,9 +43,9 @@ Fixes 3 and 4 were later reverted to keep the upstream code unmodified ([ADR-000
 | Test | poll | result |
 |---|---|---|
 | Rollout, 10 s `preStop` | 20/20 | 1 failure |
-| 2 rollouts, 20 s `preStop` | — | 58 failures / 61 |
-| 1 rollout | — | 70/70 |
-| 2 rollouts | — | 80/81 |
+| 2 rollouts, 20 s `preStop` | - | 58 failures / 61 |
+| 1 rollout | - | 70/70 |
+| 2 rollouts | - | 80/81 |
 | WebSocket (`v2`), deployment + 2 rollouts | 88/88 | 86/88 |
 
 ### Version `v3` (modified result, abandoned, see ADR-0009)
@@ -110,7 +110,7 @@ Peak usage measured during the 100-user plateau:
 | poll (×2) | 66–85m | 85–88 Mi | CPU above the request (50m), no limit so no throttling. Memory at **69 % of the limit** (128 Mi) |
 | result (×2) | 14–15m | 36 Mi | Wide margin |
 | worker | 15m | 58 Mi | Far below the request (256 Mi): oversized |
-| redis | 21m | 7 Mi | — |
+| redis | 21m | 7 Mi | - |
 | postgres | 10m | 42 Mi | No `requests` defined |
 | Nodes | 11–16 % CPU | 56–59 % memory | Memory is mostly used by AKS system components |
 

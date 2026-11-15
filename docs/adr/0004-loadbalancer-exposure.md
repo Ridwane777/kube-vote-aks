@@ -1,6 +1,6 @@
 # ADR-0004: Exposing poll and result through two `LoadBalancer` Services
 
-- **Status:** Accepted — `result` Service configuration (affinity, `Local`) superseded by [ADR-0005](0005-result-websocket-without-affinity.md)
+- **Status:** Accepted; `result` Service configuration (affinity, `Local`) superseded by [ADR-0005](0005-result-websocket-without-affinity.md)
 - **Date:** 2026-10-15
 - **Deciders:** Ridwane777
 

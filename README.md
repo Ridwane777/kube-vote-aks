@@ -31,7 +31,7 @@ poll ──► redis ──► worker ──► postgres ◄── result
 | Action | Link |
 |---|---|
 | **Deploy, stop, start, roll back** (Jenkins) | [http://jenkins.example.com:8090/job/bernstein-deploy/build](http://jenkins.example.com:8090/job/bernstein-deploy/build) → *Build with Parameters* |
-| Same with GitHub Actions (when the organisation has minutes) | [Actions → Deploy → Run workflow](https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml) |
+| Same with GitHub Actions (when the organisation has minutes) | [Actions → Deploy → Run workflow](https://github.com/Ridwane777/kube-vote-aks/actions/workflows/deploy.yml) |
 
 | Jenkins parameter | Effect |
 |---|---|
@@ -173,4 +173,4 @@ The PostgreSQL password is fixed on the **first start** on an empty disk; changi
 
 ## Author
 
-**Ridwane777** — design, manifests, pipelines, measurements and documentation.
+**Ridwane777**: design, manifests, pipelines, measurements and documentation.

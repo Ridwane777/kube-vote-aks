@@ -26,7 +26,7 @@ Goal: trigger a deployment **from a link**. Until now, deployment only ran throu
 **Option A**, `.github/workflows/deploy.yml`:
 
 - **manual** trigger only, with two fields: `tag` (empty = current commit) and `rollback` (redeploy without rebuilding, `SKIP_BUILD=1`);
-- Azure login through **OIDC**: the identity is only accepted for `repo:Ridwane777/bernstein:ref:refs/heads/main`, with the *Contributor* role scoped to the `bernstein-spain-rg` group;
+- Azure login through **OIDC**: the identity is only accepted for `repo:Ridwane777/kube-vote-aks:ref:refs/heads/main`, with the *Contributor* role scoped to the `bernstein-spain-rg` group;
 - the cluster is started if it is stopped;
 - `POSTGRES_PASSWORD` is **generated during the run**. The script only uses it if the Kubernetes Secret does not exist yet, so it is never stored anywhere but Kubernetes;
 - `concurrency` prevents two simultaneous deployments;

@@ -1,5 +1,5 @@
 # Deploy the Poll application from a link:
-#   https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml
+#   https://github.com/Ridwane777/kube-vote-aks/actions/workflows/deploy.yml
 #   → "Run workflow". Leave "tag" empty to build and deploy the current commit;
 #   set "tag" and tick "rollback" to redeploy an existing version without rebuilding.
 #

@@ -10,7 +10,7 @@ Surveyed on 2026-10-15 in the repository and on the cluster.
 | Docker Hub | Base images `python:3.14-slim`, `node:24-slim`, `maven`, `eclipse-temurin:25-jre`, `redis:8.10.2`, `postgres:18.6` | Anonymous pull rate limit | Builds and Redis / PostgreSQL pod starts fail |
 | Jenkins (`jenkins/jenkins:lts`) on a VPS (jenkins.example.com:8090) | Deploy, stop and start from a link (`Jenkinsfile`, [ADR-0011](adr/0011-jenkins-deployment.md)) | VPS resources (8 vCPU, 23 GB); *Docker Pipeline* plugin required | No deployment link; the command-line procedure remains available |
 | GitHub Actions | Alternative to Jenkins (`.github/workflows/deploy.yml`, [ADR-0010](adr/0010-github-actions-deployment.md)) | **Organisation minutes exhausted** (as of 2026-10-20) | Workflow unusable until the monthly reset |
-| Public CDNs (Google, jQuery, BootstrapCDN) | AngularJS, jQuery, Font Awesome, loaded by the browser | — | Pages without style or interactivity (see [docs/legal](legal/README.md), risks 3 and 4) |
+| Public CDNs (Google, jQuery, BootstrapCDN) | AngularJS, jQuery, Font Awesome, loaded by the browser | - | Pages without style or interactivity (see [docs/legal](legal/README.md), risks 3 and 4) |
 
 ## Images and versions
 
@@ -18,7 +18,7 @@ Surveyed on 2026-10-15 in the repository and on the cluster.
 |---|---|---|---|
 | `redis` | `8.10.2` (pinned on 2026-10-18) | 8.10.2 | None. Before: `8`, a floating tag |
 | `postgres` | `18.6` (pinned on 2026-10-18) | 18.6 | None. Before: `18`. A major version change would require a data migration |
-| `poll`, `worker`, `result` | one tag per deployment (`v3`, git hash) | — | None: tags are immutable |
+| `poll`, `worker`, `result` | one tag per deployment (`v3`, git hash) | - | None: tags are immutable |
 
 Remaining improvement: pin digests (`redis@sha256:…`) to guard against a republished tag.
 

@@ -1,6 +1,6 @@
-# ADR-0001: Hosting platform — AKS + ACR in Poland Central
+# ADR-0001: Hosting platform: AKS + ACR in Poland Central
 
-- **Status:** Accepted — region and resource group superseded by [ADR-0002](0002-region-spain-central.md)
+- **Status:** Accepted; region and resource group superseded by [ADR-0002](0002-region-spain-central.md)
 - **Date:** 2026-10-15
 - **Deciders:** Ridwane777
 
@@ -37,7 +37,7 @@ Own constraints:
 | Public IP (`LoadBalancer`) | ✅ native | ⚠️ MetalLB / NodePort to configure | ✅ | ❌ |
 | Reproducible by others | ✅ "ready-to-use cluster" | ⚠️ depends on our install | ✅ | ❌ |
 | Cost to us | Existing credit | Credit, more VMs | No credit or limited credit | Low |
-| Operational load | Low (managed control plane) | High (upgrades, etcd, certificates) | Low | — |
+| Operational load | Low (managed control plane) | High (upgrades, etcd, certificates) | Low | - |
 
 ## Decision
 
@@ -79,5 +79,5 @@ Estimates, to be confirmed with the Azure Pricing Calculator and replaced by amo
 
 ## Links
 
-- Supersedes: —
+- Supersedes: -
 - Superseded by: [ADR-0002](0002-region-spain-central.md) (region and resource group)

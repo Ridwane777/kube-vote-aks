@@ -11,9 +11,9 @@ A modern application is made of several programs. In this project:
 | Program | Language | Role |
 |---|---|---|
 | **poll** | Python (Flask) | Web page where people vote |
-| **redis** | — | Queue: poll drops votes into it |
+| **redis** | - | Queue: poll drops votes into it |
 | **worker** | Java | Reads votes from Redis and stores them in PostgreSQL |
-| **postgres** | — | Database that keeps the votes |
+| **postgres** | - | Database that keeps the votes |
 | **result** | Node.js | Web page showing results in real time |
 
 ```
@@ -485,7 +485,7 @@ Everything is in the "bernstein" namespace. Images come from the ACR.
 
 | File | Content |
 |---|---|
-| — | `kubectl create secret …` (outside the repository) |
+| - | `kubectl create secret …` (outside the repository) |
 | `k8s/00-namespace.yaml` | `bernstein` namespace |
 | `k8s/05-postgres-init.yaml` | `schema.sql` ConfigMap (`votes` table) |
 | `k8s/10-postgres.yaml` | Headless Service + PostgreSQL StatefulSet |

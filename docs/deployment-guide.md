@@ -14,7 +14,7 @@ This guide goes **from a blank computer to the application online**, then covers
 | 8 | [Check from another computer](#step-8-check-from-another-computer) | anyone | 2 min |
 | 9 | [Update without downtime](#step-9-update-without-downtime) | an operator | 5 min |
 | 10 | [Roll back to the previous version](#step-10-roll-back-to-the-previous-version) | an operator | 2 min |
-| 11 | [Stop, start, delete](#step-11-stop-start-delete) | an operator | — |
+| 11 | [Stop, start, delete](#step-11-stop-start-delete) | an operator | - |
 | 12 | [Deploy from a link (GitHub Actions)](#step-12-deploy-from-a-link-github-actions) | setup: the subscription owner, once | 5 min |
 | 13 | [Deploy from a link (Jenkins)](#step-13-deploy-from-a-link-jenkins) | setup: the Jenkins and subscription owner, once | 15 min |
 
@@ -71,7 +71,7 @@ If `docker run` answers `permission denied`, you did not log back in after `user
 ## Step 2: Get the repository
 
 ```sh
-git clone git@github.com:Ridwane777/bernstein.git
+git clone git@github.com:Ridwane777/kube-vote-aks.git
 cd bernstein
 ```
 
@@ -301,7 +301,7 @@ If `curl` doesn't answer right away, wait 1 to 2 minutes: the Azure Load Balance
 
 | Symptom | Command to inspect | Common cause |
 |---|---|---|
-| `error: docker is not installed` / `envsubst …` | — | Step 1 incomplete |
+| `error: docker is not installed` / `envsubst …` | - | Step 1 incomplete |
 | `unauthorized` on `docker push` | `az acr login -n $ACR_NAME` | No rights on the registry (step 5) |
 | Pod in `ImagePullBackOff` | `kubectl describe pod <pod> -n bernstein` | Cluster not attached to the registry: `az aks update -g bernstein-spain-rg -n bernstein-aks-2 --attach-acr $ACR_NAME` |
 | Pod in `CrashLoopBackOff` | `kubectl logs <pod> -n bernstein` | Database unreachable or inconsistent password |
@@ -422,7 +422,7 @@ az group delete -n bernstein-spain-rg --yes        # EVERYTHING: cluster, regist
 
 The [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) workflow runs `scripts/deploy.sh` on a GitHub runner. Once configured, you deploy **from a browser**, with no tool installed:
 
-**https://github.com/Ridwane777/bernstein/actions/workflows/deploy.yml** → **Run workflow**
+**https://github.com/Ridwane777/kube-vote-aks/actions/workflows/deploy.yml** → **Run workflow**
 
 | Field | Effect |
 |---|---|
@@ -437,7 +437,7 @@ GitHub authenticates to Azure through **federated identity (OIDC)**: no password
 
 ```sh
 RG=bernstein-spain-rg
-REPO=Ridwane777/bernstein
+REPO=Ridwane777/kube-vote-aks
 
 # 1. Create GitHub's identity in Azure
 APP_ID=$(az ad app create --display-name bernstein-github-deploy --query appId -o tsv)
@@ -507,7 +507,7 @@ Link: **http://jenkins.example.com:8090/job/bernstein-deploy/build** → **Build
 | *Pipeline*, *Git*, *Credentials Binding*, **Docker Pipeline** plugins | ✅ installed | *Manage Jenkins → Plugins → Installed* |
 | Jenkins reaches the host's Docker (socket and binary mounted in its container) | ✅ `jenkins/jenkins:lts` started with `-v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker` | `docker exec jenkins docker version` |
 | The `jenkins` user is in the group owning the socket | ✅ group `988` | `stat -c %g /var/run/docker.sock` on the host. If the result is not `988`, put that number in `--group-add` in the `Jenkinsfile` |
-| ≈ 2 GB of disk for the tools image, enough memory for Maven | ✅ 8 vCPU, 23 GB RAM | — |
+| ≈ 2 GB of disk for the tools image, enough memory for Maven | ✅ 8 vCPU, 23 GB RAM | - |
 
 ### 13.2 Create Jenkins's Azure identity (once, by the subscription owner)
 
@@ -531,7 +531,7 @@ az ad sp create-for-rbac --name bernstein-jenkins-deploy --role Contributor \
 2. **GitHub repository access** (if private): *Add Credentials* → *Username with password*, with a GitHub account that can read the repository and a **personal access token** (*GitHub → Settings → Developer settings → Personal access tokens*, read access to the repository), ID `github-bernstein`.
 3. **The job**: *New Item* → name **`bernstein-deploy`** → **Pipeline** →
    - *Pipeline* → Definition: **Pipeline script from SCM**
-   - SCM: Git, URL `https://github.com/Ridwane777/bernstein.git`, credentials `github-bernstein`, branch `*/main`
+   - SCM: Git, URL `https://github.com/Ridwane777/kube-vote-aks.git`, credentials `github-bernstein`, branch `*/main`
    - Script Path: `Jenkinsfile`
 4. **Run it once** with *Build Now*. Jenkins reads the `Jenkinsfile` and discovers the parameters. The button then becomes **Build with Parameters**.
 

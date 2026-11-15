@@ -1,6 +1,6 @@
 # ADR-0008: Zero-downtime updates, probes and resources
 
-- **Status:** Accepted — result part (graceful shutdown, 10 s `preStop`) superseded by [ADR-0009](0009-upstream-components-unmodified.md)
+- **Status:** Accepted; result part (graceful shutdown, 10 s `preStop`) superseded by [ADR-0009](0009-upstream-components-unmodified.md)
 - **Date:** 2026-10-15
 - **Deciders:** Ridwane777
 
